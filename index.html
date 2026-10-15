@@ -264,7 +264,7 @@
       <div class="cal-grid" id="calDow"></div>
       <div class="cal-grid" id="calGrid" style="margin-top:4px"></div>
       <div class="legend">
-        <span><i class="l-ok"></i>可預約（上＝上午場、下＝下午場，數字為剩餘位數）</span>
+        <span><i class="l-ok"></i>可預約（早＝上午場、午＝下午場，數字為剩餘位數）</span>
         <span><i class="l-full"></i>額滿</span>
         <span><i class="l-closed"></i>公休／未開放</span>
         <span>禁寵＝當天不開放寵物</span>
@@ -776,8 +776,8 @@ const CONFIG = {
   backgroundOpacity: 0.32,                 // 背景圖濃淡：0（看不見）～1（原色）；想更淡就調小
 
   sessions: [
-    { id: "am", label: "上午場", short: "上", time: "10:30", arrive: ["10:30", "14:00"] },
-    { id: "pm", label: "下午場", short: "下", time: "14:00", arrive: ["14:00", "17:00"] }
+    { id: "am", label: "上午場", short: "早", time: "10:30", arrive: ["10:30", "14:00"] },
+    { id: "pm", label: "下午場", short: "午", time: "14:00", arrive: ["14:00", "17:00"] }
   ],
   arrivalStepMinutes: 30,                  // 預計抵達時間的選項間隔
   petFee: 50,                              // 毛小孩每隻費用（元）；0 = 不收費
@@ -849,7 +849,7 @@ function applyContent(){
   SESSIONS.forEach(x => {
     const d = D.sessions.find(y => y.id === x.id) || {}, o = (c.sessions || {})[x.id] || {};
     Object.assign(x, d, o);
-    x.short = o.label ? String(o.label).charAt(0) : d.short;
+    x.short = (o.label && o.label !== d.label) ? String(o.label).charAt(0) : d.short;   // 沒改過名稱就用預設簡稱（早／午）
   });
 }
 
