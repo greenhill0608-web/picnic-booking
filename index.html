@@ -622,7 +622,7 @@
       <div id="lgMsg"></div>
     </details>
     <div class="card" id="kitMain">
-      <h2>野餐套組追蹤（報到・取餐・押金）</h2>
+      <h2>野餐套組追蹤（取餐・押金）</h2>
       <div class="hint" style="margin:0 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
       <div class="grid2">
         <div><label for="kDate" style="margin-top:0">日期</label><input type="date" id="kDate"></div>
@@ -631,7 +631,6 @@
         <div><label for="kFilter">處理狀態</label>
           <select id="kFilter">
             <option value="all">全部</option>
-            <option value="notIn">尚未報到</option>
             <option value="notPicked">尚未取餐</option>
             <option value="dep">押金待退</option>
           </select></div>
@@ -1858,7 +1857,6 @@ function renderKit(){
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
   let list = f ? all.filter(b => b.date === f) : all;
   const ss = $("kSession").value; if(ss) list = list.filter(b => b.lodging ? (!b.session || b.session === ss) : sessionOf(b) === ss);
-  if(flt === "notIn") list = list.filter(b => !b.lodging && !kitOf(b).checkedIn);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
@@ -1866,12 +1864,11 @@ function renderKit(){
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}`;
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
-    const done = (k.checkedIn || b.lodging) && k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
+    const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">🛏 住宿客</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
       <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}${b.lodging && b.note ? `・${esc(b.note)}` : ""}</div>
       <div class="kit-ctl">
-        ${b.lodging ? "" : `<label class="inline"><input type="checkbox" data-kf="checkedIn" ${k.checkedIn ? "checked" : ""}><span>已報到</span></label>`}
         <label class="inline"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
         <span class="kit-dep">押金 NT$ <input type="number" min="0" step="10" inputmode="numeric" data-kf="deposit" value="${k.deposit || ""}" placeholder="0"></span>
         <label class="inline"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
