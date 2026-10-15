@@ -979,6 +979,9 @@ function dayInfo(s, S, used){
   const [mn, mx] = windowRange(S);
   if(s < mn) return { state:"out", why:"當天或太近的日期無法線上預約，臨時入園請改由官方 LINE 或電話預約", sessions:[] };
   if(s > mx){
+    const rr = dayRule(s, S);
+    if(SESSIONS.every(x => !rr.sessions[x.id].open))
+      return { state:"closed", why: rr.overridden ? "當天公休" : `每週${WEEK[wdOf(s)]}公休`, sessions:[] };
     const o = new Date(s + "T00:00:00"); o.setDate(o.getDate() - S.maxAdvanceDays);
     const opens = fmt(o);
     return { state:"out", opens, why:`尚未開放，${opens.slice(5).replace("-", "/").replace(/\/0/, "/").replace(/^0/, "")} 開放預約（目前只開放到 ${mx}）`, sessions:[] };
