@@ -6,11 +6,11 @@
     "0": {
       "am": {
         "open": true,
-        "cap": 30
+        "cap": 60
       },
       "pm": {
         "open": true,
-        "cap": 30
+        "cap": 60
       }
     },
     "1": {
@@ -66,11 +66,11 @@
     "6": {
       "am": {
         "open": true,
-        "cap": 50
+        "cap": 60
       },
       "pm": {
         "open": true,
-        "cap": 40
+        "cap": 60
       }
     }
   },
