@@ -238,6 +238,7 @@
   <button data-tab="lookup">預約查詢</button>
   <button data-tab="admin" id="adminTabBtn" class="hidden">管理後台</button>
   <button data-tab="checkin" id="checkinTabBtn" class="hidden">現場報到</button>
+  <button data-tab="kit" id="kitTabBtn" class="hidden">套組追蹤</button>
 </nav>
 
 <main>
@@ -401,13 +402,6 @@
       </div>
 
       <div class="card">
-        <h2>野餐套組追蹤</h2>
-        <div class="hint" style="margin:0 0 8px">報到、取餐、押金收取與退還，在獨立視窗中管理。</div>
-        <button class="btn" id="kitOpen" style="margin-top:0">開啟野餐套組追蹤</button>
-        <div class="hint" id="kitSummary"></div>
-      </div>
-
-      <div class="card">
         <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
         <input type="date" id="stDate">
         <div id="stChips" style="margin-top:6px"></div>
@@ -525,6 +519,8 @@
           <div><label for="ctAddPrice">單價（元）</label><input id="ctAddPrice" type="number" min="0"></div>
           <div><label for="ctAddUnit">單位</label><input id="ctAddUnit" type="text"></div>
           <div><label for="ctAddMax">單筆最多可加購</label><input id="ctAddMax" type="number" min="1" max="20"></div>
+          <div><label for="ctAddDisc">每位大人折抵（元）</label><input id="ctAddDisc" type="number" min="0"></div>
+          <div><label for="ctAddDiscN">每個套組最多折抵（位大人）</label><input id="ctAddDiscN" type="number" min="0" max="10"></div>
         </div>
         <label for="ctAddImage">照片網址（留空＝使用內建照片）</label><input id="ctAddImage" type="text" placeholder="https://…">
         <label for="ctAddNote">照片下方說明</label><input id="ctAddNote" type="text">
@@ -604,34 +600,38 @@
     </div>
   </section>
 
+  <!-- 野餐套組追蹤 -->
+  <section id="tab-kit" class="hidden">
+    <div class="card hidden" id="kitGate">
+      <h2>野餐套組追蹤</h2>
+      <div class="hint">請先登入管理後台，才能使用。</div>
+      <button class="btn" id="kitGoAdmin">前往管理後台登入</button>
+    </div>
+    <div class="card" id="kitMain">
+      <h2>野餐套組追蹤（報到・取餐・押金）</h2>
+      <div class="hint" style="margin:0 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
+      <div class="grid2">
+        <div><label for="kDate" style="margin-top:0">日期</label><input type="date" id="kDate"></div>
+        <div><label for="kSession" style="margin-top:0">場次</label>
+          <select id="kSession"><option value="">全部場次</option></select></div>
+        <div><label for="kFilter">處理狀態</label>
+          <select id="kFilter">
+            <option value="all">全部</option>
+            <option value="notIn">尚未報到</option>
+            <option value="notPicked">尚未取餐</option>
+            <option value="dep">押金待退</option>
+          </select></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn ghost small" id="kClear" style="margin:0 0 2px">清除篩選</button></div>
+      </div>
+      <div class="hint" id="kStat"></div>
+      <div id="kitList" style="margin-top:10px"></div>
+    </div>
+  </section>
+
 </main>
 
 <footer id="footerBox"></footer>
 
-<div class="modal-overlay hidden" id="kitModal" role="dialog" aria-modal="true" aria-labelledby="kitTitle">
-  <div class="edit-box kit-box">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <h2 id="kitTitle" style="margin:0">野餐套組追蹤（報到・取餐・押金）</h2>
-      <button class="btn ghost small" id="kitClose">關閉</button>
-    </div>
-    <div class="hint" style="margin:6px 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
-    <div class="grid2">
-      <div><label for="kDate" style="margin-top:0">日期</label><input type="date" id="kDate"></div>
-      <div><label for="kSession" style="margin-top:0">場次</label>
-        <select id="kSession"><option value="">全部場次</option></select></div>
-      <div><label for="kFilter">處理狀態</label>
-        <select id="kFilter">
-          <option value="all">全部</option>
-          <option value="notIn">尚未報到</option>
-          <option value="notPicked">尚未取餐</option>
-          <option value="dep">押金待退</option>
-        </select></div>
-      <div style="display:flex;align-items:flex-end"><button class="btn ghost small" id="kClear" style="margin:0 0 2px">清除篩選</button></div>
-    </div>
-    <div class="hint" id="kStat"></div>
-    <div id="kitList" style="margin-top:10px"></div>
-  </div>
-</div>
 <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
   <div class="edit-box">
     <h2 id="editTitle">編輯預約</h2>
@@ -736,6 +736,7 @@ const CONFIG = {
 
   addon: {
     name: "雙人野餐套組", price: 980, unit: "組", max: 5,
+    adultDiscount: 50, discountPerSet: 2,     // 加購套組時：每位大人折抵 50 元，每個套組最多折抵 2 位大人
     image: "",                                // 留空 = 使用內嵌在本檔的照片；也可填圖片網址／檔名改用外部圖片
     imageNote: "圖片僅供參考，實際內容以現場供應為準"
   },
@@ -1377,6 +1378,8 @@ function renderPet(){
   if($("priceBox")) renderPrice();
 }
 
+// 有加購套組：每位大人折抵 adultDiscount 元，每個套組最多折抵 discountPerSet 位大人
+const addonDiscount = (adults, sets) => (CONFIG.addon.adultDiscount || 0) * Math.max(0, Math.min(adults, (sets || 0) * (CONFIG.addon.discountPerSet || 0)));
 function calc(){
   const a = +$("adults").value, c = +$("children").value, q = +$("addon").value;
   const pets = +$("pets").value || 0, petRate = petFeeOn($("date").value) ? CONFIG.petFee : 0;
@@ -1387,7 +1390,9 @@ function calc(){
     childTotal: c * CONFIG.childPrice,
     addonTotal: q * CONFIG.addon.price,
     credit: a * CONFIG.adultCredit,
-    get total(){ return this.adultTotal + this.childTotal + this.addonTotal + this.petTotal; }
+    discount: addonDiscount(a, q),
+    discountN: Math.min(a, q * (CONFIG.addon.discountPerSet || 0)),
+    get total(){ return this.adultTotal + this.childTotal + this.addonTotal + this.petTotal - this.discount; }
   };
 }
 
@@ -1403,6 +1408,7 @@ function renderPrice(){
     <div class="line"><span>孩童 ${p.c} × ${CONFIG.childPrice}</span><span>${money(p.childTotal)}</span></div>
     ${p.q ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${p.q} × ${CONFIG.addon.price}</span><span>${money(p.addonTotal)}</span></div>` : ""}
     ${p.petTotal ? `<div class="line"><span>毛小孩 ${p.pets} 隻 × ${p.petRate}</span><span>${money(p.petTotal)}</span></div>` : ""}
+    ${p.discount ? `<div class="line"><span>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount}</span><span>－${money(p.discount)}</span></div>` : ""}
     <div class="line total"><span>預估總金額</span><span>${money(p.total)}</span></div>
     <div class="credit">費用皆為現場收取</div>`;
 }
@@ -1423,8 +1429,9 @@ function selectDate(s){
 function bind(){
   document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-    ["book","lookup","admin","checkin"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
+    ["book","lookup","admin","checkin","kit"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
     if(b.dataset.tab === "admin") openAdmin();
+    if(b.dataset.tab === "kit"){ renderKit(); if(Store.remote && GH.adminToken()) Store.load().then(renderKit).catch(e => toast("無法讀取 GitHub：" + e.message, "err")); }
     if(b.dataset.tab === "checkin"){ renderCheckin(); if(Store.remote && GH.adminToken()) Store.load().then(renderCheckin).catch(e => toast("無法讀取 GitHub：" + e.message, "err")); }
     if(b.dataset.tab === "book") refreshBook();
   }));
@@ -1604,7 +1611,7 @@ function submitBooking(){
     adults: p.a, children: p.c, addonQty: p.q,
     pets, cars,
     name, phone, email, emailOpt: !!email && $("emailOpt").checked, note,
-    petFee: p.petTotal, total: p.total, credit: p.credit,
+    petFee: p.petTotal, total: p.total, credit: p.credit, discount: p.discount,
     status: "confirmed",
     createdAt: new Date().toISOString()
   };
@@ -1620,6 +1627,7 @@ function submitBooking(){
     <div>大人 ${p.a}・孩童 ${p.c}${pets ? `・毛小孩 ${pets} 隻` : ""}${p.q ? `・${esc(CONFIG.addon.name)} ${p.q} ${CONFIG.addon.unit}` : ""}</div>
     <div>${esc(name)}　${esc(phone)}</div>
     ${p.petTotal ? `<div>毛小孩費用 ${p.pets} 隻 × ${p.petRate} ＝ ${money(p.petTotal)}</div>` : ""}
+    ${p.discount ? `<div>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount} ＝ －${money(p.discount)}</div>` : ""}
     <div class="line total"><span>預估總金額</span><span>${money(p.total)}</span></div>
     <div class="credit">費用皆為現場收取</div>`;
   $("doneMail").textContent = (booking.emailOpt && Store.remote) ? `✉️ 預約成功通知將寄到 ${email}（可能需要幾分鐘，請一併檢查垃圾郵件匣）` : "";
@@ -1703,7 +1711,7 @@ function readEdit(){
 function editCalc(){
   const e = readEdit(); if([e.adults, e.children, e.pets, e.addonQty].some(x => !Number.isFinite(x))) return null;
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0;
-  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate;
+  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate - addonDiscount(e.adults, e.addonQty);
 }
 function updateEditCalc(){
   const c = editCalc();
@@ -1769,6 +1777,9 @@ async function saveEdit(){
 const kitOf = b => Object.assign({ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false }, b.kit || {});
 function renderKit(){
   if(!$("kitList")) return;
+  const logged = isAdminLogged();
+  $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged);
+  if(!logged) return;
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
@@ -1779,7 +1790,6 @@ function renderKit(){
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
-  $("kitSummary").textContent = `共 ${all.length} 筆有加購套組的預約；尚未退還的押金合計 ${money(held)}`;
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}`;
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
@@ -1823,10 +1833,7 @@ function bindKit(){
   $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
   ["kDate","kSession","kFilter"].forEach(id => $(id).addEventListener("change", renderKit));
   $("kClear").addEventListener("click", () => { $("kDate").value = ""; $("kSession").value = ""; $("kFilter").value = "all"; renderKit(); });
-  const closeKit = () => { $("kitModal").classList.add("hidden"); document.body.style.overflow = ""; };
-  $("kitOpen").addEventListener("click", () => { renderKit(); $("kitModal").classList.remove("hidden"); document.body.style.overflow = "hidden"; });
-  $("kitClose").addEventListener("click", closeKit);
-  $("kitModal").addEventListener("click", e => { if(e.target === $("kitModal")) closeKit(); });
+  $("kitGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
   $("kitList").addEventListener("change", e => {
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
@@ -1947,7 +1954,7 @@ async function ciSave(id, box, btn){
   [["adults","大人",v.a],["children","孩童",v.c],["pets","毛小孩",v.p]].forEach(([f, lb, to]) => { if(was[f] !== to) changes.push({ f:lb, from:was[f], to }); });
   if(!k.checkedIn){ nk.checkedIn = true; nk.checkedInAt = new Date().toISOString(); changes.push({ f:"套組：已報到", from:"否", to:"是" }); }
   if(!changes.length) return toast("人數沒有變更", "ok");
-  const total = v.a * CONFIG.adultPrice + v.c * CONFIG.childPrice + (old.addonQty || 0) * CONFIG.addon.price + v.p * (petFeeOn(old.date) ? CONFIG.petFee : 0);
+  const total = v.a * CONFIG.adultPrice + v.c * CONFIG.childPrice + (old.addonQty || 0) * CONFIG.addon.price + v.p * (petFeeOn(old.date) ? CONFIG.petFee : 0) - addonDiscount(v.a, old.addonQty || 0);
   const now = new Date().toISOString();
   const nb = Object.assign({}, old, { adults:v.a, children:v.c, pets:v.p, total, kit:nk, updatedAt:now,
     history:(Array.isArray(old.history) ? old.history : []).concat([{ at:now, by:"現場報到", changes }]) });
@@ -2065,7 +2072,7 @@ function renderContent(){
   const A = CONFIG.addon, v = (id, x) => { $(id).value = x; };
   v("ctAdultPrice", CONFIG.adultPrice); v("ctAdultCredit", CONFIG.adultCredit); v("ctChildPrice", CONFIG.childPrice);
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
-  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || "");
+  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   v("ctInfo", CONFIG.infoLines.join("\n")); v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule);
   v("ctFooter", CONFIG.footer || ""); v("ctSiteName", CONFIG.siteName);
@@ -2088,7 +2095,7 @@ function saveContent(){
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
     petRule:t("ctPetRule"), infoLines:lines("ctInfo"), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
-    addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), image:t("ctAddImage"), imageNote:t("ctAddNote") },
+    addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote") },
     sessions:{}
   };
   if(![c.adultPrice, c.adultCredit, c.childPrice].every(x => int(x, 0, 100000))) return msg(out, "票價與抵用金請輸入 0 以上的整數", "err");
@@ -2096,6 +2103,7 @@ function saveContent(){
   if(!c.childNote || !c.creditNote && c.adultCredit > 0) return msg(out, "請填寫孩童適用說明與抵用金說明", "err");
   if(!c.addon.name || !c.addon.unit) return msg(out, "請填寫加購商品名稱與單位", "err");
   if(!int(c.addon.price, 0, 100000)) return msg(out, "加購單價請輸入 0 以上的整數", "err");
+  if(!int(c.addon.adultDiscount, 0, 100000) || !int(c.addon.discountPerSet, 0, 10)) return msg(out, "套組折抵請輸入 0 以上的整數（每個套組最多折抵 0～10 位）", "err");
   if(!int(c.addon.max, 1, 20)) return msg(out, "加購數量上限請輸入 1～20", "err");
   if(c.addon.image && !/^https?:\/\//i.test(c.addon.image)) return msg(out, "照片網址需以 http:// 或 https:// 開頭（或留空）", "err");
   if(!int(c.petFee, 0, 10000)) return msg(out, "毛小孩費用請輸入 0 以上的整數", "err");
@@ -2323,8 +2331,10 @@ function syncAdminEntry(){
   if(urlWant){ try{ localStorage.setItem("picnic_admin_entry", "1"); }catch(e){} }
   const want = urlWant || flag;
   $("adminTabBtn").classList.toggle("hidden", !want && !($("tab-admin") && !$("tab-admin").classList.contains("hidden")));
-  $("checkinTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && $("tab-checkin").classList.contains("hidden"));
-  if(urlWant && $("tab-admin").classList.contains("hidden") && $("tab-checkin").classList.contains("hidden")) $("adminTabBtn").click();
+  const sub = ["checkin","kit"].some(t => !$("tab-" + t).classList.contains("hidden"));
+  $("checkinTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && !sub);
+  $("kitTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && !sub);
+  if(urlWant && $("tab-admin").classList.contains("hidden") && !sub) $("adminTabBtn").click();
 }
 window.addEventListener("hashchange", syncAdminEntry);
 if(!Store.remote) $("pwCard").classList.add("hidden");
