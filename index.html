@@ -69,6 +69,9 @@
   .msg.err{background:#fbe9e7;color:var(--warn)}
   .msg.info{background:#fff8e1;color:#8a6d00}
   .hint{font-size:13px;color:var(--muted);margin-top:6px}
+  .call-box{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border:1px dashed var(--green);border-radius:10px;background:#f6faf3;font-size:14px;color:var(--green-d)}
+  .call-btn{display:inline-block;padding:8px 16px;border-radius:999px;background:var(--green);color:#fff;text-decoration:none;font-size:15px;font-weight:600}
+  .call-btn:hover{background:var(--green-d)}
   .info-box{background:#f7faf5;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
   .info-box ul{margin:6px 0 0;padding-left:20px}
   .notice{background:#fff8e1;border:1px solid #f0e2a8;border-radius:10px;padding:12px 14px;font-size:14px;margin-top:6px}
@@ -144,6 +147,7 @@
   .cal-day.ok:hover{border-color:var(--green)}
   .cal-day.full{background:#f1f3f2;color:#8a948d}
   .cal-day.closed{background:#fafafa;color:#b8c2bb}
+  .cal-day .s.opens{color:#b07a2a;font-size:10px}
   .cal-day.out{background:#fff;color:#d0d6d2;border-color:#f0f3f1}
   .cal-day.sel{outline:2px solid var(--green);background:#dff0e4}
   .cal-day.empty{border:0;background:none}
@@ -204,6 +208,10 @@
         <span><i class="l-full"></i>額滿</span>
         <span><i class="l-closed"></i>公休／未開放</span>
         <span>禁寵＝當天不開放寵物</span>
+      </div>
+      <div class="call-box">
+        <span>若預約當日，請來電</span>
+        <a class="call-btn" href="tel:0918273858" aria-label="撥打電話 0918273858">📞 0918-273-858</a>
       </div>
       <input type="hidden" id="date">
       <div id="dateMsg"></div>
@@ -970,7 +978,11 @@ function dayInfo(s, S, used){
   if(s < todayStr()) return { state:"out", why:"日期已過", sessions:[] };
   const [mn, mx] = windowRange(S);
   if(s < mn) return { state:"out", why:"當天或太近的日期無法線上預約，臨時入園請改由官方 LINE 或電話預約", sessions:[] };
-  if(s > mx) return { state:"out", why:`目前只開放預約到 ${mx}（未來 ${S.maxAdvanceDays} 天內）`, sessions:[] };
+  if(s > mx){
+    const o = new Date(s + "T00:00:00"); o.setDate(o.getDate() - S.maxAdvanceDays);
+    const opens = fmt(o);
+    return { state:"out", opens, why:`尚未開放，${opens.slice(5).replace("-", "/").replace(/\/0/, "/").replace(/^0/, "")} 開放預約（目前只開放到 ${mx}）`, sessions:[] };
+  }
   const r = dayRule(s, S);
   const sess = SESSIONS.map(x => {
     const c = r.sessions[x.id];
@@ -1141,7 +1153,7 @@ function renderCalendar(){
   const t = new Date();
   const lowIdx = t.getFullYear()*12 + t.getMonth();
   const hiD = new Date(mx + "T00:00:00");
-  const hiIdx = hiD.getFullYear()*12 + hiD.getMonth();
+  const hiIdx = hiD.getFullYear()*12 + hiD.getMonth() + 1; // 多顯示下一個月，讓客人看到尚未開放日期的開放時間
   let idx = calMonth.y*12 + calMonth.m;
   if(idx < lowIdx) idx = lowIdx;
   if(idx > hiIdx) idx = hiIdx;
@@ -1166,6 +1178,7 @@ function renderCalendar(){
         .map(x => `<span class="s">${x.short}${x.state === "full" ? "滿" : x.rem}</span>`).join("");
       if(info.state === "full") label = `<span class="s">額滿</span>`;
     } else if(info.state === "closed") label = `<span class="s">公休</span>`;
+    else if(info.opens) label = `<span class="s opens">${+info.opens.slice(5,7)}/${+info.opens.slice(8)}<br>開放</span>`;
     const pet = info.state === "ok" && isNoPetDay(s) ? `<span class="s">禁寵</span>` : "";
     const aria = `${showDate(s)} ` + (info.state === "ok"
       ? info.sessions.filter(x => x.state !== "closed").map(x => `${x.label}${x.state === "ok" ? "剩 " + x.rem + " 位" : "額滿"}`).join("、")
