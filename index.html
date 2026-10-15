@@ -34,7 +34,7 @@
   @media (prefers-reduced-motion:no-preference){ .hero-stage .hero-tag{animation:sway 4.6s ease-in-out infinite alternate} }
 
   nav{display:flex;justify-content:center;background:var(--card);border-bottom:1px solid var(--line)}
-  nav button{flex:1;padding:14px 8px;border:0;background:none;font-size:15px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;font-family:inherit}
+  nav button{flex:1;padding:10px 4px;line-height:1.35;border:0;background:none;font-size:15px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;font-family:inherit}
   nav button.active{color:var(--green-d);border-bottom-color:var(--green);font-weight:600}
   nav button{max-width:240px}
   main{max-width:720px;margin:0 auto;padding:16px}
@@ -241,11 +241,11 @@
 </header>
 
 <nav>
-  <button data-tab="book" class="active">線上預約</button>
-  <button data-tab="lookup">預約查詢</button>
-  <button data-tab="admin" id="adminTabBtn" class="hidden">管理後台</button>
-  <button data-tab="checkin" id="checkinTabBtn" class="hidden">現場報到</button>
-  <button data-tab="kit" id="kitTabBtn" class="hidden">套組追蹤</button>
+  <button data-tab="book" class="active" aria-label="線上預約">線上<br>預約</button>
+  <button data-tab="lookup" aria-label="預約查詢">預約<br>查詢</button>
+  <button data-tab="admin" id="adminTabBtn" class="hidden" aria-label="管理後台">管理<br>後台</button>
+  <button data-tab="checkin" id="checkinTabBtn" class="hidden" aria-label="現場報到">現場<br>報到</button>
+  <button data-tab="kit" id="kitTabBtn" class="hidden" aria-label="套組追蹤">套組<br>追蹤</button>
 </nav>
 
 <main>
@@ -414,6 +414,18 @@
         <input type="date" id="stDate">
         <div id="stChips" style="margin-top:6px"></div>
         <div id="stBox"></div>
+      </div>
+
+      <div class="card" id="dpCard">
+        <h2>待確認訂金<span class="ci-badge" id="dpCount" style="font-size:13px;margin-left:8px"></span></h2>
+        <div class="hint" style="margin:0 0 8px">套組 3 組（含）以上需先匯訂金的訂單。客人經 LINE 回報後，在這裡搜尋電話並勾選「已確認收款」。</div>
+        <div class="grid2">
+          <div><label for="dpQ" style="margin-top:0">搜尋電話／姓名／代號</label><input id="dpQ" type="search" inputmode="search" autocomplete="off" placeholder="例：12345"></div>
+          <div><label for="dpFilter" style="margin-top:0">狀態</label>
+            <select id="dpFilter"><option value="pending">待確認（未收款）</option><option value="paid">已確認收款</option><option value="all">全部</option></select></div>
+        </div>
+        <div class="hint" id="dpStat"></div>
+        <div id="dpList" style="margin-top:8px"></div>
       </div>
 
       <div class="card" id="dailyCard">
@@ -1623,7 +1635,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); makeFoldable(); bindCustomerEdit();
+  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("hideEntryBtn").addEventListener("click", () => {
@@ -1907,7 +1919,7 @@ function prepayHtml(b){
   const due = b.lodging ? 0 : depositDue(b.addonQty || 0); if(!due) return "";
   const paid = kitOf(b).depositPaid;
   return paid
-    ? `<div class="prepay paid">💰 已付訂金 ${money(due)}　<b>現場結帳請扣除</b>${b.total ? `（預估總額 ${money(b.total)} → 現場應收 ${money(Math.max(0, b.total - due))}）` : ""}</div>`
+    ? `<div class="prepay paid">💰 已付訂金 ${money(due)}${kitOf(b).depositAcct ? `（匯款末 5 碼 ${esc(kitOf(b).depositAcct)}）` : ""}　<b>現場結帳請扣除</b>${b.total ? `（預估總額 ${money(b.total)} → 現場應收 ${money(Math.max(0, b.total - due))}）` : ""}</div>`
     : `<div class="prepay">⏳ 需訂金 ${money(due)}，<b>尚未付訂金</b></div>`;
 }
 function renderKit(){
@@ -1915,6 +1927,7 @@ function renderKit(){
   const logged = isAdminLogged();
   $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged); $("lodgeCard").classList.toggle("hidden", !logged);
   if(!logged) return;
+  renderDeposits();
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
@@ -1950,11 +1963,15 @@ async function saveKit(id, field, raw, el){
     const v = raw === "" ? 0 : Number(raw);
     if(!Number.isInteger(v) || v < 0){ toast("押金請輸入 0 以上的整數", "err"); return renderKit(); }
     k.deposit = v; if(v === 0) k.depositReturned = false;
+  } else if(field === "depositAcct"){
+    if(raw !== "" && !/^\d{5}$/.test(raw)){ toast("匯款帳號末 5 碼請輸入 5 位數字（或留空）", "err"); return renderKit(), renderDeposits(); }
+    k.depositAcct = raw;
   } else k[field] = !!raw;
   const names = { checkedIn:"套組：已報到", pickedUp:"套組：已取餐", depositPaid:"套組：已付訂金", deposit:"套組：押金", depositReturned:"套組：押金已退" };
   const yn = v => v ? "是" : "否";
   const changes = [];
   ["checkedIn","pickedUp","depositPaid","depositReturned"].forEach(f => { if(cur[f] !== k[f]) changes.push({ f:names[f], from:yn(cur[f]), to:yn(k[f]) }); });
+  if((cur.depositAcct || "") !== (k.depositAcct || "")) changes.push({ f:"訂金：匯款帳號末5碼", from:cur.depositAcct || "（空白）", to:k.depositAcct || "（空白）" });
   if(cur.deposit !== k.deposit) changes.push({ f:names.deposit, from:cur.deposit, to:k.deposit });
   if(!changes.length) return renderKit();
   if(field === "depositReturned" && k.depositReturned && !(k.deposit > 0)){ toast("請先填寫押金金額", "err"); return renderKit(); }
@@ -2003,6 +2020,38 @@ function bindKit(){
   $("kitList").addEventListener("change", e => {
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
+  });
+}
+/* ========= 後台：待確認訂金 ========= */
+function renderDeposits(){
+  if(!$("dpList")) return;
+  const all = Store.all().filter(b => b.status === "confirmed" && !b.lodging && depositDue(b.addonQty || 0) > 0);
+  const pend = all.filter(b => !kitOf(b).depositPaid);
+  $("dpCount").textContent = pend.length ? `${pend.length} 筆待確認` : "";
+  $("dpCount").classList.toggle("hidden", !pend.length);
+  const q = $("dpQ").value.trim().toLowerCase(), flt = $("dpFilter").value;
+  let list = flt === "pending" ? pend : flt === "paid" ? all.filter(b => kitOf(b).depositPaid) : all;
+  if(q) list = list.filter(b => (b.phone || "").includes(q) || (b.name || "").toLowerCase().includes(q) || (b.code || "").toLowerCase().includes(q));
+  list = list.slice().sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || "").localeCompare(b.createdAt || ""));
+  const sum = list.reduce((n, b) => n + depositDue(b.addonQty), 0);
+  $("dpStat").textContent = `${list.length} 筆、訂金合計 ${money(sum)}` + (flt === "pending" ? `（全部待確認共 ${pend.length} 筆、${money(pend.reduce((n, b) => n + depositDue(b.addonQty), 0))}）` : "");
+  $("dpList").innerHTML = list.length ? list.map(b => {
+    const k = kitOf(b), ses = sessionById(sessionOf(b));
+    return `<div class="kit-row ${k.depositPaid ? "done" : ""}" data-dp="${esc(b.id)}">
+      <div class="top"><span>${esc(showDate(b.date))} ${esc(ses ? ses.label : "")}</span><span>需訂金 ${esc(money(depositDue(b.addonQty)))}</span></div>
+      <div>${esc(b.name)}　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>・代號 ${esc(b.code)}・${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</div>
+      <div class="kit-ctl">
+        <label class="inline"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已確認收款</span></label>
+        <span class="kit-dep">匯款帳號末 5 碼 <input type="text" inputmode="numeric" maxlength="5" data-kf="depositAcct" value="${esc(k.depositAcct || "")}" placeholder="選填" style="width:90px"></span>
+      </div>
+    </div>`;
+  }).join("") : `<div class="hint">${flt === "pending" ? "目前沒有待確認的訂金 🎉" : "沒有符合的訂單"}</div>`;
+}
+function bindDeposits(){
+  ["dpQ","dpFilter"].forEach(id => $(id).addEventListener(id === "dpQ" ? "input" : "change", renderDeposits));
+  $("dpList").addEventListener("change", e => {
+    const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-dp]"); if(!el || !row) return;
+    saveKit(row.dataset.dp, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value.trim(), el);
   });
 }
 /* ========= 後台：每日入園人數與門票費用 ========= */
@@ -2475,6 +2524,7 @@ function renderAdminList(){
   $("fStat").textContent = `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
     + (f ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
   $("adminList").innerHTML = list.length ? list.map(b => bookingCard(b, true)).join("") : `<div class="hint">沒有預約資料</div>`;
+  renderDeposits();
 }
 
 // 「某場次 勾選＋人數上限」的小格子（每週設定與指定日期共用）
