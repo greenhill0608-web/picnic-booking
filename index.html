@@ -88,6 +88,8 @@
   .done-codehint{font-size:12px;color:var(--muted);margin-bottom:10px}
   .done-panel .code{font-size:34px;letter-spacing:4px;margin:2px 0;font-variant-numeric:tabular-nums}
   .done-panel .price{text-align:left;font-size:14px;margin:8px 0 12px;padding:10px 12px;background:#fff;border:1px dashed var(--line);border-radius:10px}
+  .cap-banner{margin:8px 0;padding:10px 12px;border-radius:10px;font-size:14px;background:#fff6dc;border:1px solid #ecd58a;color:#5a4a12}
+  .cap-banner.red{background:#fde8e4;border-color:#e3a99f;color:#7a2a1c}
   .adm-note{margin-top:4px;padding:6px 8px;background:#fff6dc;border-radius:8px;border:1px solid #ecd58a;font-size:13px;white-space:pre-wrap}
   .modal-overlay{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;background:rgba(30,40,25,.55)}
   .modal-overlay.hidden{display:none}
@@ -330,6 +332,7 @@
           <button class="btn ghost small" id="fClear">顯示全部</button>
           <button class="btn small" id="csvBtn">匯出 CSV</button>
         </div>
+        <div class="cap-banner hidden" id="capBanner"></div>
         <div class="hint" id="fStat"></div>
         <div id="adminList" style="margin-top:12px"></div>
       </div>
@@ -397,6 +400,23 @@
         </div>
         <div id="noPetList" style="margin-top:8px"></div>
         <div class="hint">程式 CONFIG.noPetDates 內的預設日期會一併生效。</div>
+      </div>
+
+      <div class="card" id="purgeCard">
+        <h2>清理舊資料（刪除日期區間內的預約）</h2>
+        <div class="hint" id="capInfo" style="margin:0 0 8px"></div>
+        <div class="grid2">
+          <div><label for="pgFrom" style="margin-top:0">入園日期：從</label><input type="date" id="pgFrom"></div>
+          <div><label for="pgTo" style="margin-top:0">到（含）</label><input type="date" id="pgTo"></div>
+        </div>
+        <div class="hint" id="pgCount" style="margin:6px 0"></div>
+        <div class="hint" style="margin:4px 0">只能刪除「今天以前」的預約；今天及之後的資料永遠不可刪除。</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="pgExport">先匯出此區間 CSV</button>
+          <button class="btn danger" id="pgDelete">刪除此區間的預約</button>
+        </div>
+        <div id="pgMsg"></div>
+        <div class="hint">⚠️ 刪除後<b>無法復原</b>（連同店家備註與修改紀錄一併刪除），請先匯出 CSV 留存。已取消與已確認的預約都會刪除。</div>
       </div>
 
       <div class="card" id="contentCard">
@@ -665,6 +685,12 @@ const GH = {
     if(res.status === 204) return null;
     return opt.raw ? res.text() : res.json();
   },
+  async graphql(query, variables){
+    const res = await fetch("https://api.github.com/graphql", { method:"POST", cache:"no-store",
+      headers:{ Authorization:"Bearer " + this.adminToken(), "Content-Type":"application/json" }, body: JSON.stringify({ query, variables }) });
+    if(!res.ok) throw new Error("GitHub 回應錯誤（" + res.status + "）");
+    return res.json();
+  },
   async putFile(path, text, message){
     const cur = await this.api("/contents/" + path, { admin:true, allow404:true });
     return this.api("/contents/" + path, { method:"PUT", admin:true, body:{
@@ -750,15 +776,21 @@ const Store = {
     this._b = bk; this._s = st;
   },
   async loadBookings(){
-    const out = [];
-    for(let page = 1; page <= 10; page++){
-      const arr = await GH.api(`/issues?state=all&per_page=100&sort=created&direction=asc&page=${page}`);
+    const out = [], MAXP = 30;
+    // 客人端只讀「最近 35 天內有異動」的預約：開放預約只有 21 天，更早的資料不影響名額，這樣預約再多載入速度也不會變慢
+    // 管理員則讀取全部（最多 30 頁 × 100 筆 = 3000 筆）
+    const since = GH.adminToken() ? "" : "&since=" + new Date(Date.now() - 35 * 864e5).toISOString();
+    this.truncated = false; this.rawCount = 0;
+    for(let page = 1; page <= MAXP; page++){
+      const arr = await GH.api(`/issues?state=all&per_page=100&sort=created&direction=desc&page=${page}${since}`);
+      this.rawCount += arr.length;
+      if(page === MAXP && arr.length === 100) this.truncated = true;
       arr.forEach(it => {
         if(it.pull_request || !String(it.title).startsWith("[預約]")) return;
         const m = /```json\s*([\s\S]*?)```/.exec(it.body || ""); if(!m) return;
         try{
           const b = JSON.parse(m[1]);
-          b.issue = it.number; b.status = it.state === "closed" ? "cancelled" : "confirmed";
+          b.issue = it.number; b.node = it.node_id; b.status = it.state === "closed" ? "cancelled" : "confirmed";
           out.push(b);
         }catch(e){}
       });
@@ -798,6 +830,7 @@ const Store = {
   async addRemote(b){
     try{
       await this.load();
+      if(this.truncated) return { ok:false, error:"系統資料量已達上限，暫時無法預約，請聯絡店家" };
       const need = b.adults + b.children, left = this.remaining(b.date, b.session);
       if(need > left) return { ok:false, error:`該場次剩餘名額 ${left} 位，不足以預約 ${need} 位` };
       const ses = sessionById(b.session);
@@ -842,6 +875,39 @@ const Store = {
       await GH.api("/issues/" + old.issue, { method:"PATCH", admin:true, body });
       await this.load(); return { ok:true };
     }catch(e){ return { ok:false, error:"儲存失敗：" + e.message }; }
+  },
+  // 刪除多筆預約。遠端：優先用 GraphQL 永久刪除 Issue；權限不足時改為「封存」（關閉並改標題為 [封存]，預約不再計入）。
+  async purge(list, onProgress){
+    const res = { deleted:0, archived:0, failed:0, skipped:0 };
+    // 最後防線：今天及之後的預約永遠不可刪除
+    const today = todayStr();
+    res.skipped = list.filter(b => !(b.date < today)).length;
+    list = list.filter(b => b.date < today);
+    if(!this.remote){
+      const ids = new Set(list.map(b => b.id));
+      this.saveAll(this.all().filter(b => !ids.has(b.id))); res.deleted = ids.size; return res;
+    }
+    let canDelete = true;
+    for(let i = 0; i < list.length; i++){
+      const b = list[i];
+      try{
+        if(canDelete && b.node){
+          try{
+            const r = await GH.graphql(`mutation($id:ID!){ deleteIssue(input:{issueId:$id}){ clientMutationId } }`, { id:b.node });
+            if(r.errors && r.errors.length) throw new Error(r.errors[0].message || "graphql");
+            res.deleted++;
+          }catch(e){ canDelete = false; res.noDeleteReason = e.message; }
+        }
+        if(!canDelete){
+          await GH.api("/issues/" + b.issue, { method:"PATCH", admin:true, body:{ title:`[封存] ${b.date} ${b.code}`, state:"closed", state_reason:"not_planned", labels:["archived"] } });
+          res.archived++;
+        }
+      }catch(e){ res.failed++; res.lastError = e.message; }
+      onProgress && onProgress(i + 1, list.length);
+      await new Promise(r => setTimeout(r, this.purgeDelay === undefined ? 600 : this.purgeDelay));
+    }
+    await this.load();
+    return res;
   },
   async cancelRemote(id){
     const b = this._b.find(x => x.id === id);
@@ -1284,13 +1350,13 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit();
+  bindEdit(); bindPurge();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("logoutBtn").addEventListener("click", () => { sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
   $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
-  $("csvBtn").addEventListener("click", exportCSV);
+  $("csvBtn").addEventListener("click", () => exportCSV());
 
   // 勾選場次時，讓人數上限欄位變淡／恢復
   document.addEventListener("change", e => {
@@ -1543,6 +1609,54 @@ async function saveEdit(){
   renderAdminList(); renderStats(); refreshBook();
   openEdit(old.id); msg($("edMsg"), "已儲存 ✔", "ok");
 }
+/* ========= 資料量提醒與清理 ========= */
+const CAP_LIMIT = 3000;
+function renderCapacity(){
+  const b = $("capBanner"), info = $("capInfo");
+  if(!Store.remote){ b.classList.add("hidden"); info.textContent = `目前共 ${Store.all().length} 筆預約（本機測試模式）。`; return; }
+  const n = Store.rawCount || Store.all().length, pct = Math.round(n / CAP_LIMIT * 100);
+  info.textContent = `目前資料量：${n} / ${CAP_LIMIT} 筆（${pct}%）。超過 ${CAP_LIMIT} 筆後，後台只會顯示最新的 ${CAP_LIMIT} 筆，且客人端會暫停接受新預約。`;
+  const level = n >= CAP_LIMIT * 0.95 ? "red" : n >= CAP_LIMIT * 0.8 ? "warn" : "";
+  b.classList.toggle("hidden", !level); b.classList.toggle("red", level === "red");
+  b.textContent = level ? `${level === "red" ? "🚨" : "⚠️"} 預約資料已累積 ${n} 筆（上限 ${CAP_LIMIT}）。請先匯出 CSV，再到下方「清理舊資料」刪除已過去的日期區間。` : "";
+  if(level && !renderCapacity.warned){ renderCapacity.warned = true; toast(`預約資料已達 ${pct}%，請盡快清理舊資料`, "err"); }
+}
+function purgeRange(){
+  const f = $("pgFrom").value, t = $("pgTo").value;
+  if(!f || !t) return { list:[], f, t };
+  return { f, t, list: Store.all().filter(b => b.date >= f && b.date <= t && b.date < todayStr()) };
+}
+function updatePurgeCount(){
+  const { list, f, t } = purgeRange();
+  $("pgCount").textContent = (f && t) ? (f > t ? "起始日不能晚於結束日" : `此區間共 ${list.length} 筆預約（有效 ${list.filter(b => b.status === "confirmed").length}、已取消 ${list.filter(b => b.status !== "confirmed").length}）`) : "請選擇日期區間";
+}
+function bindPurge(){
+  const yday = new Date(); yday.setDate(yday.getDate() - 1);
+  const ymax = `${yday.getFullYear()}-${String(yday.getMonth()+1).padStart(2,"0")}-${String(yday.getDate()).padStart(2,"0")}`;
+  ["pgFrom","pgTo"].forEach(id => { $(id).max = ymax; $(id).addEventListener("change", updatePurgeCount); });
+  $("pgExport").addEventListener("click", () => {
+    const { list, f, t } = purgeRange();
+    if(!f || !t || f > t) return msg($("pgMsg"), "請先選擇正確的日期區間", "err");
+    if(!list.length) return msg($("pgMsg"), "此區間沒有預約", "err");
+    exportCSV(list, `bookings-${f}_${t}.csv`); msg($("pgMsg"), `已匯出 ${list.length} 筆`, "ok");
+  });
+  $("pgDelete").addEventListener("click", e => {
+    const { list, f, t } = purgeRange(), out = $("pgMsg");
+    if(!f || !t || f > t) return msg(out, "請先選擇正確的日期區間", "err");
+    if(!list.length) return msg(out, "此區間沒有預約", "err");
+    if(t >= todayStr()) return msg(out, "只能刪除今天以前（不含今天）的預約；今天及之後的資料永遠不可刪除", "err");
+    twoStep(e.currentTarget, `再按一次確認刪除 ${list.length} 筆`, async () => {
+      const btn = $("pgDelete"); btn.disabled = true;
+      const res = await Store.purge(list, (i, n) => msg(out, `刪除中… ${i} / ${n}`, "ok"));
+      btn.disabled = false;
+      let text = `完成：永久刪除 ${res.deleted} 筆`;
+      if(res.archived) text += `；${res.archived} 筆因權限不足改為「封存」（已關閉、不再計入預約，但仍佔用 GitHub 的 Issue 數量，可到 GitHub 的 Issues 頁面手動刪除）`;
+      if(res.failed) text += `；失敗 ${res.failed} 筆（${res.lastError || ""}）`;
+      msg(out, text, res.failed ? "err" : "ok");
+      renderAdminList(); renderStats(); renderCapacity(); updatePurgeCount(); refreshBook();
+    });
+  });
+}
 function bindEdit(){
   $("adminList").addEventListener("click", e => { const b = e.target.closest("[data-edit]"); if(b) openEdit(b.dataset.edit); });
   $("edClose").addEventListener("click", closeEdit);
@@ -1627,7 +1741,7 @@ function renderAdmin(){
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderContent(); renderAdminList(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); syncOvFields(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); syncOvFields(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
@@ -1793,21 +1907,21 @@ function renderNoPets(){
     : `<div class="hint">目前沒有額外設定的日期</div>`;
 }
 
-function exportCSV(){
+function exportCSV(list, filename){
   const csvCell = v => {
     let s = String(v ?? "");
     if(/^[=+\-@]/.test(s)) s = "'" + s;           // 防止試算表公式注入
     return `"${s.replace(/"/g, '""')}"`;
   };
   const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
-  const rows = Store.all().map(b => [
+  const rows = (list || Store.all()).map(b => [
     b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty,
     b.name, b.phone, b.email, b.emailOpt ? "是" : "否", b.total, b.note, b.adminNote || "", (b.history || []).length, b.status === "confirmed" ? "已確認" : "已取消", b.createdAt
   ]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8" }));
-  a.download = `bookings-${todayStr()}.csv`;
+  a.download = filename || `bookings-${todayStr()}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }
 
