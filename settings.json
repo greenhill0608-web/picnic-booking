@@ -79,5 +79,53 @@
       "open": false
     }
   },
-  "noPets": []
+  "noPets": [],
+  "content": {
+    "adultPrice": 200,
+    "adultCredit": 50,
+    "childPrice": 100,
+    "childNote": "4 歲以上～小六(無折抵消費）",
+    "creditNote": "可抵咖啡小棧消費",
+    "petFee": 50,
+    "petFeeFrom": "2026-11-01",
+    "maxPets": 5,
+    "maxCars": 5,
+    "petRule": "戶外草原野餐區需繫繩，以不干擾其他訪客為前提，並請清理排泄物",
+    "infoLines": [],
+    "notices": [
+      "建議事先預約野餐套組，現場輕食數量有限",
+      "務必填寫正確的手機號碼，否則視為無效訂單",
+      "單筆最多 {max} 位，超過請分成兩張訂單填寫",
+      "當日臨時想入園，請改由官方 LINE 或電話預約",
+      "攜帶寵物須繫繩並清理排泄物；特定日期不開放寵物入園"
+    ],
+    "footer": "",
+    "siteName": "綠丘野餐預約",
+    "addon": {
+      "name": "雙人野餐套組",
+      "price": 980,
+      "unit": "組",
+      "max": 5,
+      "image": "",
+      "imageNote": "圖片僅供參考，實際內容以現場供應為準"
+    },
+    "sessions": {
+      "am": {
+        "label": "上午場",
+        "time": "10:30",
+        "arrive": [
+          "10:30",
+          "14:00"
+        ]
+      },
+      "pm": {
+        "label": "下午場",
+        "time": "14:00",
+        "arrive": [
+          "14:00",
+          "17:00"
+        ]
+      }
+    }
+  }
 }
