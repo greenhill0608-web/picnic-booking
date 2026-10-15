@@ -1,0 +1,43 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 部署時才把 repo 資訊與「預約用權杖」填進網頁（權杖不會出現在 repo 的程式碼裡）
+      - name: Inject repo info and booking token
+        env:
+          BOOKING_TOKEN: ${{ secrets.BOOKING_TOKEN }}
+        run: |
+          mkdir _site
+          cp index.html _site/index.html
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          sed -i "s|owner: \"\"|owner: \"${OWNER}\"|; s|repo: \"\"|repo: \"${REPO}\"|; s|__GH_TOKEN__|${BOOKING_TOKEN}|" _site/index.html
+          test -n "$BOOKING_TOKEN" || echo "::warning::尚未設定 BOOKING_TOKEN，客人將無法送出預約"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
