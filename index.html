@@ -104,6 +104,7 @@
   .modal-overlay{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;background:rgba(30,40,25,.55)}
   .modal-overlay.hidden{display:none}
   .edit-box{width:min(100%,560px);margin:auto;background:#fff;border-radius:14px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  .kit-box{width:min(100%,760px)}
   .edit-box h2{margin:0 0 4px}
   .hist{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fafaf7}
   .hist div{padding:4px 0;border-bottom:1px dashed var(--line)} .hist div:last-child{border-bottom:0}
@@ -352,21 +353,11 @@
         <div id="adminList" style="margin-top:12px"></div>
       </div>
 
-      <div class="card" id="kitCard">
-        <h2>野餐套組追蹤（報到・取餐・押金）</h2>
-        <div class="hint" style="margin:0 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
-        <div class="row">
-          <input type="date" id="kDate">
-          <select id="kFilter">
-            <option value="all">全部</option>
-            <option value="notIn">尚未報到</option>
-            <option value="notPicked">尚未取餐</option>
-            <option value="dep">押金待退</option>
-          </select>
-          <button class="btn ghost small" id="kClear">顯示全部日期</button>
-        </div>
-        <div class="hint" id="kStat"></div>
-        <div id="kitList" style="margin-top:10px"></div>
+      <div class="card">
+        <h2>野餐套組追蹤</h2>
+        <div class="hint" style="margin:0 0 8px">報到、取餐、押金收取與退還，在獨立視窗中管理。</div>
+        <button class="btn" id="kitOpen" style="margin-top:0">開啟野餐套組追蹤</button>
+        <div class="hint" id="kitSummary"></div>
       </div>
 
       <div class="card">
@@ -526,6 +517,30 @@
 
 <footer id="footerBox"></footer>
 
+<div class="modal-overlay hidden" id="kitModal" role="dialog" aria-modal="true" aria-labelledby="kitTitle">
+  <div class="edit-box kit-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <h2 id="kitTitle" style="margin:0">野餐套組追蹤（報到・取餐・押金）</h2>
+      <button class="btn ghost small" id="kitClose">關閉</button>
+    </div>
+    <div class="hint" style="margin:6px 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
+    <div class="grid2">
+      <div><label for="kDate" style="margin-top:0">日期</label><input type="date" id="kDate"></div>
+      <div><label for="kSession" style="margin-top:0">場次</label>
+        <select id="kSession"><option value="">全部場次</option></select></div>
+      <div><label for="kFilter">處理狀態</label>
+        <select id="kFilter">
+          <option value="all">全部</option>
+          <option value="notIn">尚未報到</option>
+          <option value="notPicked">尚未取餐</option>
+          <option value="dep">押金待退</option>
+        </select></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn ghost small" id="kClear" style="margin:0 0 2px">清除篩選</button></div>
+    </div>
+    <div class="hint" id="kStat"></div>
+    <div id="kitList" style="margin-top:10px"></div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
   <div class="edit-box">
     <h2 id="editTitle">編輯預約</h2>
@@ -1665,11 +1680,13 @@ function renderKit(){
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
   let list = f ? all.filter(b => b.date === f) : all;
+  const ss = $("kSession").value; if(ss) list = list.filter(b => sessionOf(b) === ss);
   if(flt === "notIn") list = list.filter(b => !kitOf(b).checkedIn);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
+  $("kitSummary").textContent = `共 ${all.length} 筆有加購套組的預約；尚未退還的押金合計 ${money(held)}`;
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}`;
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
@@ -1710,8 +1727,13 @@ async function saveKit(id, field, raw, el){
   renderKit(); renderAdminList();
 }
 function bindKit(){
-  ["kDate","kFilter"].forEach(id => $(id).addEventListener("change", renderKit));
-  $("kClear").addEventListener("click", () => { $("kDate").value = ""; $("kFilter").value = "all"; renderKit(); });
+  $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
+  ["kDate","kSession","kFilter"].forEach(id => $(id).addEventListener("change", renderKit));
+  $("kClear").addEventListener("click", () => { $("kDate").value = ""; $("kSession").value = ""; $("kFilter").value = "all"; renderKit(); });
+  const closeKit = () => { $("kitModal").classList.add("hidden"); document.body.style.overflow = ""; };
+  $("kitOpen").addEventListener("click", () => { renderKit(); $("kitModal").classList.remove("hidden"); document.body.style.overflow = "hidden"; });
+  $("kitClose").addEventListener("click", closeKit);
+  $("kitModal").addEventListener("click", e => { if(e.target === $("kitModal")) closeKit(); });
   $("kitList").addEventListener("change", e => {
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
