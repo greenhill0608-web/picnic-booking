@@ -88,6 +88,14 @@
   .done-codehint{font-size:12px;color:var(--muted);margin-bottom:10px}
   .done-panel .code{font-size:34px;letter-spacing:4px;margin:2px 0;font-variant-numeric:tabular-nums}
   .done-panel .price{text-align:left;font-size:14px;margin:8px 0 12px;padding:10px 12px;background:#fff;border:1px dashed var(--line);border-radius:10px}
+  .adm-note{margin-top:4px;padding:6px 8px;background:#fff6dc;border-radius:8px;border:1px solid #ecd58a;font-size:13px;white-space:pre-wrap}
+  .modal-overlay{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;background:rgba(30,40,25,.55)}
+  .modal-overlay.hidden{display:none}
+  .edit-box{width:min(100%,560px);margin:auto;background:#fff;border-radius:14px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  .edit-box h2{margin:0 0 4px}
+  .hist{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fafaf7}
+  .hist div{padding:4px 0;border-bottom:1px dashed var(--line)} .hist div:last-child{border-bottom:0}
+  .done-mail{font-size:13px;color:var(--green-d);margin:-4px 0 10px}
   .done-shot{background:#fff6dc;border:1px solid #ecd58a;border-radius:10px;padding:10px;font-size:15px;margin-bottom:12px;color:#5a4a12}
   .done-shot span{font-size:12px;color:#7d6a22}
   .code{font-size:26px;font-weight:700;letter-spacing:2px;color:var(--green-d);text-align:center;margin:8px 0}
@@ -219,15 +227,7 @@
       <select id="pets"></select>
       <div class="hint" id="petHint"></div>
 
-      <h2 class="sec">4. 加購</h2>
-      <figure class="addon-pic" id="addonPic" title="點一下放大">
-        <img id="addonImg" alt="" loading="lazy">
-        <figcaption id="addonCap"></figcaption>
-      </figure>
-      <label for="addon" id="addonLabel" style="margin-top:10px"></label>
-      <select id="addon"></select>
-
-      <h2 class="sec">5. 車輛與預計抵達時間</h2>
+      <h2 class="sec">4. 車輛與預計抵達時間</h2>
       <div class="grid2">
         <div>
           <label for="cars" style="margin-top:0">車輛數</label>
@@ -240,13 +240,23 @@
       </div>
       <div class="hint" id="arriveHint">車輛數用於安排停車；請依預計抵達時間到達。</div>
 
+      <h2 class="sec">5. 加購</h2>
+      <figure class="addon-pic" id="addonPic" title="點一下放大">
+        <img id="addonImg" alt="" loading="lazy">
+        <figcaption id="addonCap"></figcaption>
+      </figure>
+      <label for="addon" id="addonLabel" style="margin-top:10px"></label>
+      <select id="addon"></select>
+
       <h2 class="sec">6. 聯絡資料</h2>
       <label for="name" style="margin-top:0">姓名 *</label>
       <input id="name" autocomplete="name" maxlength="30">
       <label for="phone">行動電話 *</label>
       <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678" maxlength="10">
-      <label for="email">電子信箱 *</label>
+      <label for="email">電子信箱（選填）</label>
       <input id="email" type="email" autocomplete="email" maxlength="80">
+      <label class="inline" id="emailOptRow" style="margin:6px 0 0"><input type="checkbox" id="emailOpt" disabled><span>寄送預約成功通知到這個信箱</span></label>
+      <div class="hint" id="emailHint">填寫電子信箱後，可勾選是否寄送預約成功通知。</div>
       <label for="note">備註（選填）</label>
       <textarea id="note" maxlength="200"></textarea>
 
@@ -268,6 +278,7 @@
           <div class="code" id="doneCode"></div>
           <div class="done-codehint">＝ 預約日期（月日）＋手機末 5 碼</div>
           <div class="price" id="doneSummary"></div>
+          <div class="done-mail hidden" id="doneMail"></div>
           <div class="done-shot">📸 請<b>截圖留存</b>此畫面作為憑證<br><span>入園時請出示；查詢或取消需要手機號碼與代號</span></div>
           <button class="btn" id="againBtn">我已截圖，關閉</button>
         </div>
@@ -461,6 +472,44 @@
 </main>
 
 <footer id="footerBox"></footer>
+
+<div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <div class="edit-box">
+    <h2 id="editTitle">編輯預約</h2>
+    <div class="hint" id="editSub" style="margin:0 0 8px"></div>
+    <div class="grid2">
+      <div><label for="edDate">入園日期</label><input id="edDate" type="date"></div>
+      <div><label for="edSession">場次</label><select id="edSession"></select></div>
+      <div><label for="edArrival">預計抵達</label><select id="edArrival"></select></div>
+      <div><label for="edStatus">狀態</label><select id="edStatus"><option value="confirmed">已確認</option><option value="cancelled">已取消</option></select></div>
+      <div><label for="edAdults">大人</label><input id="edAdults" type="number" min="0"></div>
+      <div><label for="edChildren">孩童</label><input id="edChildren" type="number" min="0"></div>
+      <div><label for="edPets">毛小孩（隻）</label><input id="edPets" type="number" min="0"></div>
+      <div><label for="edCars">車輛數</label><input id="edCars" type="number" min="0"></div>
+      <div><label for="edAddon">加購數量</label><input id="edAddon" type="number" min="0"></div>
+      <div><label for="edTotal">預估金額（元）</label><input id="edTotal" type="number" min="0"></div>
+    </div>
+    <div class="hint" id="edCalc" style="margin:4px 0"></div>
+    <div class="grid2">
+      <div><label for="edName">姓名</label><input id="edName" maxlength="30"></div>
+      <div><label for="edPhone">手機</label><input id="edPhone" maxlength="10" inputmode="numeric"></div>
+    </div>
+    <label for="edEmail">電子信箱</label><input id="edEmail" type="email" maxlength="80">
+    <label for="edNote">客人備註</label><textarea id="edNote" rows="2" maxlength="200"></textarea>
+    <label for="edAdminNote">店家備註（內部記事）</label><textarea id="edAdminNote" rows="3" maxlength="500"></textarea>
+    <div class="hint" style="margin:4px 0">⚠️ 此網站的資料存在公開 repo，備註任何人都可能看得到，請勿寫身分證號、病史等敏感內容。</div>
+    <label class="inline"><input type="checkbox" id="edForce"><span>名額不足或該日未開放時，仍要強制儲存</span></label>
+    <div id="edMsg"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="edSave">儲存修改</button>
+      <button class="btn ghost" id="edUseCalc">套用試算金額</button>
+      <button class="btn ghost" id="edClose">關閉</button>
+    </div>
+    <h3 class="sub">編輯紀錄</h3>
+    <div class="hist" id="edHist"></div>
+  </div>
+</div>
+<div id="toast" class="toast hidden" role="status"></div>
 
 <script>
 /* 內嵌的加購套組照片（base64）。要換照片：把圖片轉成 data URI 貼在這裡，或在 CONFIG.addon.image 填外部圖片網址 */
@@ -775,6 +824,25 @@ const Store = {
     if(b){ b.status = "cancelled"; if(!this.remote) this.saveAll(list); }
     return b;
   },
+  // 後台修改預約（含狀態）。nb 是修改後的完整預約物件，history 已附在 nb.history 裡
+  async updateBooking(id, nb){
+    const old = this.all().find(x => x.id === id);
+    if(!old) return { ok:false, error:"找不到這筆預約" };
+    if(!this.remote){
+      const list = this.all(), i = list.findIndex(x => x.id === id);
+      list[i] = nb; this.saveAll(list); return { ok:true };
+    }
+    try{
+      const clean = Object.assign({}, nb); delete clean.issue; delete clean.status;
+      const ses = sessionById(clean.session);
+      const body = { title: `[預約] ${clean.date} ${ses ? ses.label : clean.session} ${clean.code}`,
+        body: "```json\n" + JSON.stringify(clean, null, 2) + "\n```" };
+      if(nb.status !== old.status) body.state = nb.status === "cancelled" ? "closed" : "open";
+      if(body.state === "closed") body.state_reason = "not_planned";
+      await GH.api("/issues/" + old.issue, { method:"PATCH", admin:true, body });
+      await this.load(); return { ok:true };
+    }catch(e){ return { ok:false, error:"儲存失敗：" + e.message }; }
+  },
   async cancelRemote(id){
     const b = this._b.find(x => x.id === id);
     if(!b) return { ok:false, error:"找不到這筆預約" };
@@ -911,15 +979,14 @@ function renderStatic(){
   const keep = { a:$("adults").value, c:$("children").value, p:$("pets").value, k:$("cars").value, q:$("addon").value };
   $("adultLabel").textContent = `大人（${money(CONFIG.adultPrice)}／人）`;
   $("childLabel").textContent = `孩童（${money(CONFIG.childPrice)}／人，${CONFIG.childNote}）`;
-  fillSelect($("adults"), 1, 15, 2, n => `${n} 位`);
-  fillSelect($("children"), 0, 15, 0, n => `${n} 位`);
+  refreshPeople(+keep.a || 2, +keep.c || 0);
   $("petLabel").textContent = "毛小孩（幾隻）";
   fillSelect($("pets"), 0, CONFIG.maxPets, 0, n => n === 0 ? "不帶毛小孩" : `${n} 隻`);
   fillSelect($("cars"), 0, CONFIG.maxCars, 1, n => n === 0 ? "0 輛（不開車）" : `${n} 輛`);
   $("addonLabel").textContent = `加購 ${CONFIG.addon.name}（${money(CONFIG.addon.price)}／${CONFIG.addon.unit}）`;
   initAddonPhoto();
   fillSelect($("addon"), 0, CONFIG.addon.max, 0, n => n === 0 ? "不加購" : `${n} ${CONFIG.addon.unit}`);
-  [["adults","a"],["children","c"],["pets","p"],["cars","k"],["addon","q"]].forEach(([id,k]) => {
+  [["pets","p"],["cars","k"],["addon","q"]].forEach(([id,k]) => {
     if(keep[k] && [...$(id).options].some(o => o.value === keep[k])) $(id).value = keep[k];
   });
 }
@@ -949,6 +1016,14 @@ function initAddonPhoto(){
   });
 }
 
+// 大人＋孩童合計不得超過「單筆上限」：選項只列到還能選的最大值
+function refreshPeople(defA, defC){
+  const max = Store.settings().maxPeoplePerBooking;
+  let a = defA !== undefined ? defA : (+$("adults").value || 1), c = defC !== undefined ? defC : (+$("children").value || 0);
+  a = Math.min(Math.max(a, 1), max); c = Math.min(Math.max(c, 0), max - a);
+  fillSelect($("adults"), 1, max - c, a, n => `${n} 位`);
+  fillSelect($("children"), 0, max - a, c, n => `${n} 位`);
+}
 function fillSelect(sel, from, to, def, label){
   sel.innerHTML = "";
   for(let i = from; i <= to; i++){
@@ -989,6 +1064,7 @@ function renderInfo(S){
     `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`
   ].concat(CONFIG.petFee > 0 ? [`毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）`] : []).concat(CONFIG.infoLines);
   $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + lines.map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
+  refreshPeople();
   $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.map(l => `<li>${esc(l.replace("{max}", S.maxPeoplePerBooking))}</li>`).join("") + "</ul>";
 }
 
@@ -1153,8 +1229,14 @@ function bind(){
     renderSessions(); renderArrival();
   });
 
+  ["adults","children"].forEach(id => $(id).addEventListener("change", () => refreshPeople()));
   ["adults","children","addon"].forEach(id => $(id).addEventListener("change", renderPrice));
   $("pets").addEventListener("change", renderPrice);
+  $("email").addEventListener("input", () => {
+    const v = $("email").value.trim(), good = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    if(good && $("emailOpt").disabled) $("emailOpt").checked = true;      // 剛填好就預設勾選，客人可自行取消
+    $("emailOpt").disabled = !good; if(!good) $("emailOpt").checked = false;
+  });
   $("submitBtn").addEventListener("click", submitBooking);
   $("againBtn").addEventListener("click", () => {
     $("bookDone").classList.add("hidden"); $("bookForm").classList.remove("hidden"); document.body.style.overflow = "";
@@ -1202,6 +1284,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
+  bindEdit();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("logoutBtn").addEventListener("click", () => { sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); renderAdmin(); });
@@ -1286,7 +1369,7 @@ function submitBooking(){
   if(people > ses.rem) return msg(out, `${ses.label}剩餘名額 ${ses.rem} 位，不足以預約 ${people} 位`, "err");
   if(!name) return msg(out, "請填寫姓名", "err");
   if(!/^09\d{8}$/.test(phone)) return msg(out, "請輸入正確的手機號碼（09 開頭共 10 碼）", "err");
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return msg(out, "請輸入正確的電子信箱", "err");
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return msg(out, "電子信箱格式不正確（可留空）", "err");
   if(!arrivalOptions(sid).includes(arrival)) return msg(out, "請選擇預計抵達時間", "err");
   if(!Number.isInteger(pets) || pets < 0 || pets > CONFIG.maxPets) return msg(out, `毛小孩隻數請選 0～${CONFIG.maxPets} 隻`, "err");
   if(pets > 0 && isNoPetDay(date)) return msg(out, "當天不開放寵物入園", "err");
@@ -1299,7 +1382,7 @@ function submitBooking(){
     date, session: sid, arrival,
     adults: p.a, children: p.c, addonQty: p.q,
     pets, cars,
-    name, phone, email, note,
+    name, phone, email, emailOpt: !!email && $("emailOpt").checked, note,
     petFee: p.petTotal, total: p.total, credit: p.credit,
     status: "confirmed",
     createdAt: new Date().toISOString()
@@ -1318,6 +1401,8 @@ function submitBooking(){
     ${p.petTotal ? `<div>毛小孩費用 ${p.pets} 隻 × ${p.petRate} ＝ ${money(p.petTotal)}</div>` : ""}
     <div class="line total"><span>預估總金額</span><span>${money(p.total)}</span></div>
     <div class="credit">費用皆為現場收取</div>`;
+  $("doneMail").textContent = (booking.emailOpt && Store.remote) ? `✉️ 預約成功通知將寄到 ${email}（可能需要幾分鐘，請一併檢查垃圾郵件匣）` : "";
+  $("doneMail").classList.toggle("hidden", !$("doneMail").textContent);
   $("bookForm").classList.add("hidden");
   $("bookDone").classList.remove("hidden");
   document.body.style.overflow = "hidden"; $("bookDone").scrollTop = 0;
@@ -1329,21 +1414,28 @@ function submitBooking(){
 }
 
 /* ========= 預約卡片 / 查詢 ========= */
-function bookingCard(b){
+function bookingCard(b, admin){
   const cancelled = b.status === "cancelled";
   const upcoming = b.date >= todayStr();
   const ses = sessionById(sessionOf(b));
+  const hist = Array.isArray(b.history) ? b.history : [];
   return `
   <div class="booking ${cancelled?"cancelled":""}">
     <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled?"已取消":"已確認"}</span></div>
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
-    <div>代碼 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}</div>
-    <div>${esc(b.name)}　${esc(b.phone)}　${esc(b.email)}</div>
+    <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}</div>
+    <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
-    ${b.note ? `<div style="color:var(--muted)">備註：${esc(b.note)}</div>` : ""}
-    ${!cancelled && upcoming ? `<div style="margin-top:8px"><button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button></div>` : ""}
+    ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
+    ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
+    ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
+      ${!cancelled && upcoming ? `<button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button>` : ""}
+    </div>
   </div>`;
 }
+const fmtTime = iso => { try{ const d = new Date(iso); const z = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return String(iso || ""); } };
 
 function doLookup(){
   if(Store.remote && !doLookup.fresh){ msg($("qMsg"), "查詢中…", "ok"); return Store.load().then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), "無法連線 GitHub：" + e.message, "err")); }
@@ -1355,7 +1447,7 @@ function doLookup(){
   list.sort((a,b) => b.date.localeCompare(a.date));
   if(!list.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼與代號", "err"); }
   msg($("qMsg"), `找到 ${list.length} 筆預約`, "ok");
-  $("qResult").innerHTML = list.map(bookingCard).join("");
+  $("qResult").innerHTML = list.map(b => bookingCard(b, false)).join("");
 }
 
 /* ========= 後台 ========= */
@@ -1370,6 +1462,96 @@ function toast(text, type){
   clearTimeout(toast.t); toast.t = setTimeout(() => t.className = "toast hidden", 5000);
 }
 Store.onSync = toast;
+/* ========= 後台：編輯預約（含歷史紀錄）========= */
+let editingId = null;
+const EDIT_FIELDS = [
+  ["date","日期"],["session","場次"],["arrival","預計抵達"],["status","狀態"],["adults","大人"],["children","孩童"],["pets","毛小孩"],
+  ["cars","車輛"],["addonQty","加購"],["total","預估金額"],["name","姓名"],["phone","手機"],["email","Email"],["note","客人備註"],["adminNote","店家備註"]];
+function fillEditArrival(sid, cur){
+  const opts = arrivalOptions(sid); if(cur && !opts.includes(cur)) opts.unshift(cur);
+  $("edArrival").innerHTML = opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  $("edArrival").value = cur && opts.includes(cur) ? cur : (opts[0] || "");
+}
+function readEdit(){
+  const n = id => Number($(id).value === "" ? NaN : $(id).value);
+  return { date:$("edDate").value, session:$("edSession").value, arrival:$("edArrival").value, status:$("edStatus").value,
+    adults:n("edAdults"), children:n("edChildren"), pets:n("edPets"), cars:n("edCars"), addonQty:n("edAddon"), total:n("edTotal"),
+    name:$("edName").value.trim(), phone:$("edPhone").value.trim(), email:$("edEmail").value.trim(),
+    note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim() };
+}
+function editCalc(){
+  const e = readEdit(); if([e.adults, e.children, e.pets, e.addonQty].some(x => !Number.isFinite(x))) return null;
+  const rate = petFeeOn(e.date) ? CONFIG.petFee : 0;
+  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate;
+}
+function updateEditCalc(){
+  const c = editCalc();
+  $("edCalc").textContent = c === null ? "" : `依目前價格試算：${money(c)}（修改人數、加購、毛小孩或日期後，可按「套用試算金額」；也可直接手動輸入）`;
+}
+function renderEditHist(b){
+  const h = (Array.isArray(b.history) ? b.history : []).slice().reverse();
+  const cut = v => { v = String(v ?? ""); return v.length > 30 ? v.slice(0, 30) + "…" : (v === "" ? "（空白）" : v); };
+  $("edHist").innerHTML = h.length ? h.map(x => `<div><b>${esc(fmtTime(x.at))}</b>　${esc(x.by || "管理員")}<br>` +
+    x.changes.map(c => `${esc(c.f)}：${esc(cut(c.from))} → ${esc(cut(c.to))}`).join("<br>") + `</div>`).join("") : `<div style="color:var(--muted)">尚無修改紀錄</div>`;
+}
+function openEdit(id){
+  const b = Store.all().find(x => x.id === id); if(!b) return;
+  editingId = id;
+  $("editSub").textContent = `代號 ${b.code}・建立於 ${fmtTime(b.createdAt)}（代號不會因修改而變動）`;
+  $("edSession").innerHTML = SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
+  $("edDate").value = b.date; $("edSession").value = sessionOf(b); fillEditArrival($("edSession").value, b.arrival);
+  $("edStatus").value = b.status;
+  $("edAdults").value = b.adults; $("edChildren").value = b.children; $("edPets").value = petsOf(b); $("edCars").value = carsOf(b);
+  $("edAddon").value = b.addonQty || 0; $("edTotal").value = b.total || 0;
+  $("edName").value = b.name || ""; $("edPhone").value = b.phone || ""; $("edEmail").value = b.email || "";
+  $("edNote").value = b.note || ""; $("edAdminNote").value = b.adminNote || "";
+  $("edForce").checked = false; msg($("edMsg"), "", "");
+  renderEditHist(b); updateEditCalc();
+  $("editModal").classList.remove("hidden"); document.body.style.overflow = "hidden";
+}
+function closeEdit(){ $("editModal").classList.add("hidden"); document.body.style.overflow = ""; editingId = null; }
+async function saveEdit(){
+  const out = $("edMsg"), old = Store.all().find(x => x.id === editingId); if(!old) return;
+  const e = readEdit();
+  if(!e.date) return msg(out, "請選擇日期", "err");
+  if(![e.adults, e.children, e.pets, e.cars, e.addonQty, e.total].every(x => Number.isInteger(x) && x >= 0)) return msg(out, "人數、毛小孩、車輛、加購與金額請輸入 0 以上的整數", "err");
+  if(e.adults + e.children < 1) return msg(out, "大人與孩童合計至少 1 位", "err");
+  if(!e.name) return msg(out, "請填寫姓名", "err");
+  if(!/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
+  if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return msg(out, "電子信箱格式不正確（可留空）", "err");
+  // 名額檢查：扣掉這筆原本佔用的人數
+  if(e.status === "confirmed" && !$("edForce").checked){
+    const rule = dayRule(e.date, Store.settings()).sessions[e.session];
+    const mine = (old.status === "confirmed" && old.date === e.date && sessionOf(old) === e.session) ? old.adults + old.children : 0;
+    const left = rule && rule.open ? rule.cap - (Store.used(e.date, e.session) - mine) : 0;
+    if(e.adults + e.children > left) return msg(out, rule && rule.open ? `該場次剩餘名額 ${Math.max(0, left)} 位，不足以容納 ${e.adults + e.children} 位（可勾選「強制儲存」）` : "該日期的這個場次未開放（可勾選「強制儲存」）", "err");
+  }
+  const changes = [];
+  const show = (k, v) => k === "session" ? ((sessionById(v) || {}).label || v) : k === "status" ? (v === "cancelled" ? "已取消" : "已確認") : v;
+  EDIT_FIELDS.forEach(([k, label]) => {
+    const was = k === "pets" ? petsOf(old) : k === "cars" ? carsOf(old) : k === "session" ? sessionOf(old) : (old[k] ?? (typeof e[k] === "number" ? 0 : ""));
+    if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
+  });
+  if(!changes.length) return msg(out, "沒有任何變更", "err");
+  const nb = Object.assign({}, old, e, { updatedAt:new Date().toISOString(),
+    history:(Array.isArray(old.history) ? old.history : []).concat([{ at:new Date().toISOString(), by:"管理員", changes }]) });
+  $("edSave").disabled = true; msg(out, "儲存中…", "ok");
+  const r = await Store.updateBooking(old.id, nb);
+  $("edSave").disabled = false;
+  if(!r.ok) return msg(out, r.error, "err");
+  toast("預約已更新（已記錄修改歷史）", "ok");
+  renderAdminList(); renderStats(); refreshBook();
+  openEdit(old.id); msg($("edMsg"), "已儲存 ✔", "ok");
+}
+function bindEdit(){
+  $("adminList").addEventListener("click", e => { const b = e.target.closest("[data-edit]"); if(b) openEdit(b.dataset.edit); });
+  $("edClose").addEventListener("click", closeEdit);
+  $("edSave").addEventListener("click", saveEdit);
+  $("edSession").addEventListener("change", () => { fillEditArrival($("edSession").value, $("edArrival").value); updateEditCalc(); });
+  ["edDate","edAdults","edChildren","edPets","edAddon"].forEach(id => $(id).addEventListener("input", updateEditCalc));
+  $("edUseCalc").addEventListener("click", () => { const c = editCalc(); if(c !== null) $("edTotal").value = c; });
+}
+
 function verifyAdminToken(tok){
   return fetch(`https://api.github.com/repos/${CONFIG.github.owner}/${CONFIG.github.repo}`, { headers:{ Authorization:"Bearer " + tok, Accept:"application/vnd.github+json" } })
     .then(r => r.ok ? r.json() : Promise.reject(new Error("權杖無效或已過期（" + r.status + "），請重新建立並到「第一次使用」重設")))
@@ -1497,7 +1679,7 @@ function renderAdminList(){
   const ok = list.filter(b => b.status === "confirmed");
   $("fStat").textContent = `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
     + (f ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
-  $("adminList").innerHTML = list.length ? list.map(bookingCard).join("") : `<div class="hint">沒有預約資料</div>`;
+  $("adminList").innerHTML = list.length ? list.map(b => bookingCard(b, true)).join("") : `<div class="hint">沒有預約資料</div>`;
 }
 
 // 「某場次 勾選＋人數上限」的小格子（每週設定與指定日期共用）
@@ -1617,10 +1799,10 @@ function exportCSV(){
     if(/^[=+\-@]/.test(s)) s = "'" + s;           // 防止試算表公式注入
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const head = ["預約代碼","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","姓名","手機","Email","預估金額","備註","狀態","建立時間"];
+  const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
   const rows = Store.all().map(b => [
     b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty,
-    b.name, b.phone, b.email, b.total, b.note, b.status === "confirmed" ? "已確認" : "已取消", b.createdAt
+    b.name, b.phone, b.email, b.emailOpt ? "是" : "否", b.total, b.note, b.adminNote || "", (b.history || []).length, b.status === "confirmed" ? "已確認" : "已取消", b.createdAt
   ]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
   const a = document.createElement("a");
@@ -1642,6 +1824,6 @@ if(Store.remote){
   Store.load().then(init).catch(e => { init(); toast("無法讀取 GitHub 資料：" + e.message, "err"); }).then(syncAdminEntry);
 } else { init(); syncAdminEntry(); }
 </script>
-<div id="toast" class="toast hidden" role="status"></div>
+
 </body>
 </html>
