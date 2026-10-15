@@ -15,8 +15,8 @@ permissions:
 
 jobs:
   notify:
-    # 只處理標題為 [預約] 且由 repo 擁有者（預約權杖）建立／關閉的 Issue，避免陌生人亂開 Issue 造成垃圾信
-    if: startsWith(github.event.issue.title, '[預約]') && github.actor == github.repository_owner
+    # 只處理標題為 [預約] 且由 repo 擁有者（預約權杖）建立／關閉的 Issue，避免陌生人亂開 Issue 造成垃圾信；現場客（代號含「現場」）不寄信
+    if: startsWith(github.event.issue.title, '[預約]') && github.actor == github.repository_owner && !contains(github.event.issue.title, ' 現場')
     runs-on: ubuntu-latest
     steps:
       - name: Send email
