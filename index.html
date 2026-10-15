@@ -104,6 +104,49 @@
   .modal-overlay{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-start;justify-content:center;padding:14px;overflow:auto;background:rgba(30,40,25,.55)}
   .modal-overlay.hidden{display:none}
   .edit-box{width:min(100%,560px);margin:auto;background:#fff;border-radius:14px;padding:16px;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+  /* 現場報到：字大、簡潔 */
+  .ci{font-size:22px}
+  .ci .card{padding:20px}
+  .ci-date{font-size:26px;font-weight:700;color:var(--green-d);text-align:center}
+  .ci-label{font-size:20px;text-align:center;margin-top:12px}
+  .ci-input{width:100%;font-size:44px;letter-spacing:.3em;text-align:center;padding:12px 8px;margin-top:6px;border:2px solid var(--green);border-radius:14px;font-family:inherit}
+  .ci-note{font-size:18px;color:var(--muted);text-align:center;margin:10px 0}
+  .ci-note.err{color:var(--warn)}
+  .ci-h{font-size:24px;margin:0 0 10px}
+  .ci-fine{font-size:16px;color:var(--muted);text-align:right;margin-top:2px}
+  .ci-book{border:2px solid var(--line);border-radius:16px;padding:16px;margin-top:14px;background:#fff}
+  .ci-book.in{border-color:var(--green);background:#f3f8f4}
+  .ci-book .nm{font-size:30px;font-weight:700}
+  .ci-book .sub{font-size:19px;color:var(--muted);margin-top:2px}
+  .ci-badge{display:inline-block;padding:2px 12px;border-radius:999px;font-size:18px;font-weight:600;background:#ecd58a;color:#5c4710;margin-left:6px;vertical-align:middle}
+  .ci-badge.ok{background:var(--green);color:#fff}
+  .ci-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+  .ci-row:first-of-type{border-top:0}
+  .ci-row .lb{font-size:26px;font-weight:600}
+  .ci-row .was{font-size:16px;color:var(--muted);font-weight:400;display:block}
+  .ci-step{display:flex;align-items:center;gap:6px}
+  .ci-step button{width:60px;height:60px;border-radius:14px;border:2px solid var(--green);background:#fff;color:var(--green-d);font-size:34px;line-height:1;cursor:pointer;font-family:inherit;padding:0}
+  .ci-step button:active{background:#dff0e4}
+  .ci-step b{min-width:56px;text-align:center;font-size:40px}
+  .ci-kit{font-size:22px;padding:10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between}
+  .ci-total{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding-top:12px;border-top:2px solid var(--green-d)}
+  .ci-total span{font-size:24px;font-weight:600}
+  .ci-total b{font-size:46px;color:var(--green-d)}
+  .ci-btn{font-size:26px;padding:18px;border-radius:14px;margin-top:14px}
+  .ci-sess{display:flex;gap:10px;margin-bottom:6px}
+  .ci-sess button{flex:1;padding:12px;font-size:22px;border-radius:12px;border:2px solid var(--line);background:#fff;font-family:inherit;cursor:pointer}
+  .ci-sess button.on{border-color:var(--green);background:#dff0e4;font-weight:700}
+  details.card.fold > summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;-webkit-tap-highlight-color:transparent}
+  details.card.fold > summary::-webkit-details-marker{display:none}
+  details.card.fold > summary::after{content:"▾";font-size:20px;color:var(--green-d);transition:transform .15s}
+  details.card.fold:not([open]) > summary::after{transform:rotate(-90deg)}
+  details.card.fold > summary h2{margin:0}
+  details.card.fold[open] > summary{margin-bottom:12px}
+  .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}
+  .dy-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;min-width:420px}
+  .dy-table th,.dy-table td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  .dy-table th:first-child,.dy-table td:first-child{text-align:left}
+  .dy-table tr.tot td{font-weight:700;border-top:2px solid var(--green-d)}
   .kit-box{width:min(100%,760px)}
   .edit-box h2{margin:0 0 4px}
   .hist{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;background:#fafaf7}
@@ -194,6 +237,7 @@
   <button data-tab="book" class="active">線上預約</button>
   <button data-tab="lookup">預約查詢</button>
   <button data-tab="admin" id="adminTabBtn" class="hidden">管理後台</button>
+  <button data-tab="checkin" id="checkinTabBtn" class="hidden">現場報到</button>
 </nav>
 
 <main>
@@ -324,6 +368,8 @@
       <h2>管理員登入</h2>
       <label for="adminPw" style="margin-top:0" id="adminPwLabel">密碼</label>
       <input id="adminPw" type="password" autocomplete="current-password">
+      <label class="inline" style="margin-top:10px"><input type="checkbox" id="rememberMe"><span>記住這台裝置（下次免輸入密碼）</span></label>
+      <div class="hint" style="margin-top:2px">請只在自己的手機或電腦勾選；共用電腦請勿勾選。按「登出」即可忘記。</div>
       <button class="btn" id="adminLoginBtn">登入</button>
       <div id="adminMsg"></div>
       <details id="setupBox" class="hidden" style="margin-top:14px">
@@ -340,6 +386,7 @@
     </div>
 
     <div id="adminPanel" class="hidden">
+      <div class="fold-bar"><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div class="card">
         <h2>預約清單</h2>
@@ -365,6 +412,23 @@
         <input type="date" id="stDate">
         <div id="stChips" style="margin-top:6px"></div>
         <div id="stBox"></div>
+      </div>
+
+      <div class="card" id="dailyCard">
+        <h2>每日入園人數與門票費用</h2>
+        <div class="grid2">
+          <div><label for="dyFrom" style="margin-top:0">從</label><input type="date" id="dyFrom"></div>
+          <div><label for="dyTo" style="margin-top:0">到（含）</label><input type="date" id="dyTo"></div>
+        </div>
+        <label for="dyBasis">統計基準</label>
+        <select id="dyBasis">
+          <option value="in">已報到（實際入園）</option>
+          <option value="all">全部有效預約（含尚未報到）</option>
+        </select>
+        <div class="hint" id="dySum"></div>
+        <div style="overflow-x:auto"><table class="dy-table" id="dyTable"></table></div>
+        <div class="hint">門票費用 = 大人 × 單價 + 孩童 × 單價 + 毛小孩收費（依入園日期），不含野餐套組。</div>
+        <button class="btn ghost small" id="dyCsv" style="margin-top:10px">匯出此區間 CSV</button>
       </div>
 
       <div class="card">
@@ -509,6 +573,33 @@
         <button class="btn ghost small" id="hideEntryBtn" style="margin-top:8px">在這台裝置隱藏後台入口</button>
         <button class="btn ghost" id="resetSettingsBtn">還原營業設定為預設值</button>
         <button class="btn danger" id="wipeBtn">清除所有資料（此瀏覽器）</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 現場報到 -->
+  <section id="tab-checkin" class="hidden ci">
+    <div class="card hidden" id="ciGate">
+      <h2>現場報到</h2>
+      <div class="ci-note">請先登入管理後台，才能使用現場報到。</div>
+      <button class="btn" id="ciGoAdmin">前往管理後台登入</button>
+    </div>
+    <div id="ciMain" class="hidden">
+      <div class="card">
+        <div class="ci-date" id="ciToday"></div>
+        <label for="ciPhone" class="ci-label">電話末 5 碼</label>
+        <input id="ciPhone" class="ci-input" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" placeholder="12345">
+        <div id="ciMsg" class="ci-note"></div>
+        <div id="ciResults"></div>
+      </div>
+      <div class="card" id="ciWalk">
+        <h2 class="ci-h">新增現場客（無預約）</h2>
+        <div class="ci-sess" id="ciSess"></div>
+        <div id="ciWalkSteps"></div>
+        <div class="ci-total"><span>門票總金額</span><b id="ciWalkTotal">NT$ 0</b></div>
+        <div class="ci-fine">不含野餐套組費用</div>
+        <button class="btn ci-btn" id="ciWalkAdd">新增並報到</button>
+        <div id="ciWalkMsg" class="ci-note"></div>
       </div>
     </div>
   </section>
@@ -715,7 +806,7 @@ const GH = {
   cfg: () => CONFIG.github || {},
   on(){ const c = this.cfg(); return !!(c.owner && c.repo); },
   publicToken(){ const t = this.cfg().token || ""; return /^__.*__$/.test(t) ? "" : t; },
-  adminToken(){ try{ return sessionStorage.getItem("picnic_admin_token") || ""; }catch(e){ return ""; } },
+  adminToken(){ try{ return sessionStorage.getItem("picnic_admin_token") || localStorage.getItem("picnic_admin_saved") || ""; }catch(e){ return ""; } },
   async api(path, opt){
     opt = opt || {};
     const c = this.cfg();
@@ -1332,8 +1423,9 @@ function selectDate(s){
 function bind(){
   document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-    ["book","lookup","admin"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
+    ["book","lookup","admin","checkin"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
     if(b.dataset.tab === "admin") openAdmin();
+    if(b.dataset.tab === "checkin"){ renderCheckin(); if(Store.remote && GH.adminToken()) Store.load().then(renderCheckin).catch(e => toast("無法讀取 GitHub：" + e.message, "err")); }
     if(b.dataset.tab === "book") refreshBook();
   }));
 
@@ -1366,6 +1458,7 @@ function bind(){
   });
 
   $("qBtn").addEventListener("click", doLookup);
+  const rememberDevice = v => { try{ if($("rememberMe").checked) localStorage.setItem("picnic_admin_saved", v); else localStorage.removeItem("picnic_admin_saved"); }catch(e){} };
   $("adminLoginBtn").addEventListener("click", () => {
     if(Store.remote){
       const pw = $("adminPw").value;
@@ -1374,12 +1467,12 @@ function bind(){
       GH.api("/contents/admin.json", { raw:true, allow404:true })
         .then(t => { if(!t) throw new Error("尚未設定密碼，請展開下方「第一次使用」先設定"); return Vault.open(t, pw).catch(() => { throw new Error("密碼錯誤"); }); })
         .then(tok => verifyAdminToken(tok))
-        .then(tok => { sessionStorage.setItem("picnic_admin_token", tok); $("adminPw").value = ""; return openAdmin(); })
+        .then(tok => { sessionStorage.setItem("picnic_admin_token", tok); rememberDevice(tok); $("adminPw").value = ""; return openAdmin(); })
         .catch(e => msg($("adminMsg"), e.message, "err"));
       return;
     }
     if($("adminPw").value === CONFIG.adminPassword){
-      sessionStorage.setItem("picnic_admin", "1"); $("adminPw").value = ""; renderAdmin();
+      sessionStorage.setItem("picnic_admin", "1"); rememberDevice("1"); $("adminPw").value = ""; renderAdmin();
     } else msg($("adminMsg"), "密碼錯誤", "err");
   });
   $("setupBtn").addEventListener("click", async () => {
@@ -1406,16 +1499,16 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit();
+  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); makeFoldable();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("hideEntryBtn").addEventListener("click", () => {
     try{ localStorage.removeItem("picnic_admin_entry"); }catch(e){}
-    sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token");
+    forgetAdmin();
     history.replaceState(null, "", location.pathname);
     location.reload();
   });
-  $("logoutBtn").addEventListener("click", () => { sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); renderAdmin(); });
+  $("logoutBtn").addEventListener("click", () => { forgetAdmin(); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
   $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
   $("csvBtn").addEventListener("click", () => exportCSV());
@@ -1645,7 +1738,7 @@ async function saveEdit(){
   if(![e.adults, e.children, e.pets, e.cars, e.addonQty, e.total].every(x => Number.isInteger(x) && x >= 0)) return msg(out, "人數、毛小孩、車輛、加購與金額請輸入 0 以上的整數", "err");
   if(e.adults + e.children < 1) return msg(out, "大人與孩童合計至少 1 位", "err");
   if(!e.name) return msg(out, "請填寫姓名", "err");
-  if(!/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
+  if(!(old.walkin && e.phone === "") && !/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
   if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return msg(out, "電子信箱格式不正確（可留空）", "err");
   // 名額檢查：扣掉這筆原本佔用的人數
   if(e.status === "confirmed" && !$("edForce").checked){
@@ -1738,6 +1831,171 @@ function bindKit(){
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
   });
+}
+/* ========= 後台：每日入園人數與門票費用 ========= */
+function dailyRows(){
+  const f = $("dyFrom").value, t = $("dyTo").value, inOnly = $("dyBasis").value === "in";
+  const map = {};
+  Store.all().filter(b => b.status === "confirmed" && (!f || b.date >= f) && (!t || b.date <= t) && (!inOnly || kitOf(b).checkedIn)).forEach(b => {
+    const r = map[b.date] || (map[b.date] = { date:b.date, groups:0, adults:0, children:0, pets:0, fee:0 });
+    r.groups++; r.adults += b.adults; r.children += b.children; r.pets += petsOf(b);
+    r.fee += ticketTotal(b.date, b.adults, b.children, petsOf(b));
+  });
+  return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+}
+function renderDaily(){
+  if(!$("dyTable")) return;
+  const rows = dailyRows();
+  const sum = rows.reduce((s, r) => ({ groups:s.groups + r.groups, adults:s.adults + r.adults, children:s.children + r.children, pets:s.pets + r.pets, fee:s.fee + r.fee }), { groups:0, adults:0, children:0, pets:0, fee:0 });
+  $("dySum").textContent = rows.length ? `共 ${rows.length} 天、入園 ${sum.adults + sum.children} 位、門票 ${money(sum.fee)}` : "此區間沒有資料";
+  $("dyTable").innerHTML = rows.length
+    ? `<tr><th>日期</th><th>組數</th><th>入園人數</th><th>大人</th><th>小孩</th><th>毛小孩</th><th>門票費用</th></tr>`
+      + rows.map(r => `<tr><td>${esc(showDate(r.date))}</td><td>${r.groups}</td><td>${r.adults + r.children}</td><td>${r.adults}</td><td>${r.children}</td><td>${r.pets}</td><td>${esc(money(r.fee))}</td></tr>`).join("")
+      + `<tr class="tot"><td>合計</td><td>${sum.groups}</td><td>${sum.adults + sum.children}</td><td>${sum.adults}</td><td>${sum.children}</td><td>${sum.pets}</td><td>${esc(money(sum.fee))}</td></tr>`
+    : "";
+}
+function bindDaily(){
+  const n = new Date(), first = `${n.getFullYear()}-${pad(n.getMonth()+1)}-01`;
+  $("dyFrom").value = first; $("dyTo").value = todayStr();
+  ["dyFrom","dyTo","dyBasis"].forEach(id => $(id).addEventListener("change", renderDaily));
+  $("dyCsv").addEventListener("click", () => {
+    const rows = dailyRows(); if(!rows.length) return toast("此區間沒有資料", "err");
+    const head = ["日期","組數","入園人數","大人","小孩","毛小孩","門票費用"];
+    const csv = "\ufeff" + [head, ...rows.map(r => [r.date, r.groups, r.adults + r.children, r.adults, r.children, r.pets, r.fee])].map(x => x.map(v => `"${String(v)}"`).join(",")).join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type:"text/csv;charset=utf-8" }));
+    a.download = `daily-${$("dyFrom").value}_${$("dyTo").value}.csv`; a.click(); URL.revokeObjectURL(a.href);
+  });
+}
+/* ========= 後台：各區塊可收折（記住每個區塊的狀態）========= */
+function makeFoldable(){
+  const KEY = "picnic_fold", OPEN_DEFAULT = ["預約清單"];
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem(KEY) || "{}"); }catch(e){}
+  const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(saved)); }catch(e){} };
+  [...$("adminPanel").children].filter(c => c.classList.contains("card")).forEach(card => {
+    let h = card.firstElementChild && card.firstElementChild.tagName === "H2" ? card.firstElementChild : null;
+    if(!h){ h = document.createElement("h2"); h.textContent = "帳號與資料管理"; }
+    const title = h.textContent.trim();
+    const det = document.createElement("details"); det.className = card.className + " fold"; if(card.id) det.id = card.id;
+    const sum = document.createElement("summary"); sum.appendChild(h);
+    det.appendChild(sum);
+    while(card.firstChild) det.appendChild(card.firstChild);
+    det.open = title in saved ? !!saved[title] : OPEN_DEFAULT.includes(title);
+    det.addEventListener("toggle", () => { saved[title] = det.open; save(); });
+    card.replaceWith(det);
+  });
+  const all = open => $("adminPanel").querySelectorAll("details.fold").forEach(d => d.open = open);
+  $("foldAll").addEventListener("click", () => all(true));
+  $("foldNone").addEventListener("click", () => all(false));
+}
+/* ========= 現場報到 ========= */
+const isAdminLogged = () => Store.remote ? !!GH.adminToken() : (sessionStorage.getItem("picnic_admin") === "1" || localStorage.getItem("picnic_admin_saved") === "1");
+function forgetAdmin(){ sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); try{ localStorage.removeItem("picnic_admin_saved"); }catch(e){} }
+const ticketTotal = (date, a, c, pets) => a * CONFIG.adultPrice + c * CONFIG.childPrice + pets * (petFeeOn(date) ? CONFIG.petFee : 0);
+const stepper = (f, label, v, was) => `<div class="ci-row"><div class="lb">${label}${was !== undefined ? `<span class="was">預約 ${was}</span>` : ""}</div>
+  <div class="ci-step" data-f="${f}"><button type="button" data-d="-1" aria-label="${label}減少">−</button><b data-v>${v}</b><button type="button" data-d="1" aria-label="${label}增加">＋</button></div></div>`;
+let ciSession = "";
+function ciAutoSession(){
+  const now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
+  let best = SESSIONS[0].id, bd = 1e9;
+  SESSIONS.forEach(x => { const [h, m] = x.time.split(":").map(Number); const d = Math.abs(mins - (h * 60 + m)); if(d < bd){ bd = d; best = x.id; } });
+  return best;
+}
+function renderCheckin(){
+  const logged = isAdminLogged();
+  $("ciGate").classList.toggle("hidden", logged);
+  $("ciMain").classList.toggle("hidden", !logged);
+  if(!logged) return;
+  const w = "日一二三四五六"[new Date().getDay()];
+  $("ciToday").textContent = `${showDate(todayStr())}（今天）`;
+  if(!ciSession) ciSession = ciAutoSession();
+  $("ciSess").innerHTML = SESSIONS.map(x => `<button type="button" data-ses="${esc(x.id)}" class="${x.id === ciSession ? "on" : ""}">${esc(x.label)} ${esc(x.time)}</button>`).join("");
+  if(!$("ciWalkSteps").innerHTML) $("ciWalkSteps").innerHTML = stepper("adults", "大人", 0) + stepper("children", "小孩", 0) + stepper("pets", "毛小孩", 0);
+  ciWalkTotal(); ciSearch();
+}
+function ciSteps(box){ const g = f => +(box.querySelector(`[data-f="${f}"] [data-v]`) || { textContent:0 }).textContent; return { a:g("adults"), c:g("children"), p:g("pets") }; }
+function ciWalkTotal(){ const v = ciSteps($("ciWalkSteps")); $("ciWalkTotal").textContent = money(ticketTotal(todayStr(), v.a, v.c, v.p)); }
+function ciSearch(){
+  const q = $("ciPhone").value.replace(/\D/g, "").slice(0, 5), out = $("ciResults"), m = $("ciMsg");
+  m.className = "ci-note";
+  if(q.length < 5){ out.innerHTML = ""; m.textContent = q.length ? `再輸入 ${5 - q.length} 碼` : "輸入客人手機的最後 5 碼"; return; }
+  const today = todayStr();
+  const list = Store.all().filter(b => b.status === "confirmed" && b.phone && b.phone.endsWith(q))
+    .filter(b => b.date >= today || (kitOf(b).checkedIn))
+    .sort((a, b) => (a.date === today ? 0 : 1) - (b.date === today ? 0 : 1) || a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
+  if(!list.length){ out.innerHTML = ""; m.className = "ci-note err"; m.textContent = "查無預約，請確認末 5 碼；若沒有預約請用下方「新增現場客」"; return; }
+  m.textContent = list.length > 1 ? `找到 ${list.length} 筆預約` : "";
+  out.innerHTML = list.map(b => {
+    const k = kitOf(b), ses = sessionById(sessionOf(b)), isToday = b.date === today;
+    return `<div class="ci-book ${k.checkedIn ? "in" : ""}" data-ci="${esc(b.id)}" data-date="${esc(b.date)}">
+      <div class="nm">${esc(b.name)}${k.checkedIn ? `<span class="ci-badge ok">已報到</span>` : ""}${isToday ? "" : `<span class="ci-badge">非今日</span>`}</div>
+      <div class="sub">${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}・${esc(b.phone)}</div>
+      ${stepper("adults", "大人", b.adults, b.adults)}${stepper("children", "小孩", b.children, b.children)}${stepper("pets", "毛小孩", petsOf(b), petsOf(b))}
+      <div class="ci-total"><span>門票總金額</span><b data-total>${money(ticketTotal(b.date, b.adults, b.children, petsOf(b)))}</b></div>
+      <div class="ci-fine">不含野餐套組費用</div>
+      <div class="ci-kit"><span>野餐套組</span><b>${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}（費用另計）` : "無"}</b></div>
+      ${b.adminNote ? `<div class="adm-note">📝 ${esc(b.adminNote)}</div>` : ""}
+      <button class="btn ci-btn" data-ci-save>${k.checkedIn ? "更新人數" : "確認報到"}</button>
+    </div>`;
+  }).join("");
+}
+async function ciSave(id, box, btn){
+  const old = Store.all().find(x => x.id === id); if(!old) return;
+  const v = ciSteps(box);
+  if(v.a + v.c < 1) return toast("大人與小孩合計至少 1 位", "err");
+  const k = kitOf(old), nk = Object.assign({}, k), changes = [];
+  const was = { adults:old.adults, children:old.children, pets:petsOf(old) };
+  [["adults","大人",v.a],["children","孩童",v.c],["pets","毛小孩",v.p]].forEach(([f, lb, to]) => { if(was[f] !== to) changes.push({ f:lb, from:was[f], to }); });
+  if(!k.checkedIn){ nk.checkedIn = true; nk.checkedInAt = new Date().toISOString(); changes.push({ f:"套組：已報到", from:"否", to:"是" }); }
+  if(!changes.length) return toast("人數沒有變更", "ok");
+  const total = v.a * CONFIG.adultPrice + v.c * CONFIG.childPrice + (old.addonQty || 0) * CONFIG.addon.price + v.p * (petFeeOn(old.date) ? CONFIG.petFee : 0);
+  const now = new Date().toISOString();
+  const nb = Object.assign({}, old, { adults:v.a, children:v.c, pets:v.p, total, kit:nk, updatedAt:now,
+    history:(Array.isArray(old.history) ? old.history : []).concat([{ at:now, by:"現場報到", changes }]) });
+  btn.disabled = true;
+  const res = await Store.updateBooking(id, nb);
+  if(!res.ok){ btn.disabled = false; return toast(res.error || "儲存失敗", "err"); }
+  toast(k.checkedIn ? "已更新人數" : "報到完成 ✔", "ok");
+  ciSearch(); renderAdminList(); renderKit(); renderStats();
+}
+async function ciWalkAdd(btn){
+  const v = ciSteps($("ciWalkSteps")), out = $("ciWalkMsg");
+  if(v.a + v.c < 1) return msg(out, "請輸入大人或小孩人數", "err");
+  const now = new Date(), z = pad, date = todayStr(), ses = sessionById(ciSession) || SESSIONS[0];
+  const code = `現場${z(now.getHours())}${z(now.getMinutes())}${z(now.getSeconds())}`;
+  const total = ticketTotal(date, v.a, v.c, v.p);
+  const b = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), code, date, session:ses.id,
+    arrival:`${z(now.getHours())}:${z(now.getMinutes())}`, adults:v.a, children:v.c, addonQty:0, pets:v.p, cars:0,
+    name:"現場客", phone:"", email:"", emailOpt:false, note:"現場客（未預約）", petFee: v.p * (petFeeOn(date) ? CONFIG.petFee : 0),
+    total, status:"confirmed", walkin:true, createdAt:now.toISOString(), kit:{ checkedIn:true, checkedInAt:now.toISOString(), pickedUp:false, deposit:0, depositReturned:false } };
+  btn.disabled = true; msg(out, "儲存中…", "ok");
+  try{
+    if(Store.remote){
+      await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${date} ${ses.label} ${code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+      await Store.load();
+    } else { const list = Store.all(); list.push(b); Store.saveAll(list); }
+  }catch(e){ btn.disabled = false; return msg(out, "新增失敗：" + e.message, "err"); }
+  btn.disabled = false;
+  $("ciWalkSteps").innerHTML = ""; renderCheckin();
+  msg(out, `✔ 已新增現場客（${ses.label}）　門票 ${money(total)}`, "ok");
+  toast("現場客已新增並報到", "ok");
+  renderAdminList(); renderKit(); renderStats(); refreshBook();
+}
+function bindCheckin(){
+  const stepHandler = (box, after) => box.addEventListener("click", e => {
+    const bt = e.target.closest("[data-d]"); if(!bt) return;
+    const st = bt.closest(".ci-step"), vb = st.querySelector("[data-v]");
+    vb.textContent = Math.max(0, Math.min(30, +vb.textContent + +bt.dataset.d)); after(bt);
+  });
+  stepHandler($("ciWalkSteps"), ciWalkTotal);
+  stepHandler($("ciResults"), bt => {
+    const card = bt.closest("[data-ci]"), v = ciSteps(card);
+    card.querySelector("[data-total]").textContent = money(ticketTotal(card.dataset.date, v.a, v.c, v.p));
+  });
+  $("ciResults").addEventListener("click", e => { const b = e.target.closest("[data-ci-save]"); if(b){ const card = b.closest("[data-ci]"); ciSave(card.dataset.ci, card, b); } });
+  $("ciPhone").addEventListener("input", ciSearch);
+  $("ciSess").addEventListener("click", e => { const b = e.target.closest("[data-ses]"); if(!b) return; ciSession = b.dataset.ses; renderCheckin(); });
+  $("ciWalkAdd").addEventListener("click", e => ciWalkAdd(e.currentTarget));
+  $("ciGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
 }
 /* ========= 資料量提醒與清理 ========= */
 const CAP_LIMIT = 3000;
@@ -1867,7 +2125,7 @@ function openAdmin(){
   return Store.load().then(renderAdmin).catch(e => { toast("無法讀取 GitHub：" + e.message, "err"); renderAdmin(); });
 }
 function renderAdmin(){
-  const logged = Store.remote ? !!GH.adminToken() : sessionStorage.getItem("picnic_admin") === "1";
+  const logged = isAdminLogged();
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
@@ -1894,6 +2152,7 @@ function statsFor(date){
   return res;
 }
 function renderStats(){
+  renderDaily();
   const dates = [...new Set(Store.all().filter(b => b.status === "confirmed" && b.date >= todayStr()).map(b => b.date))].sort().slice(0, 14);
   let date = $("stDate").value;
   if(!date){ date = dates[0] || todayStr(); $("stDate").value = date; }
@@ -2064,7 +2323,8 @@ function syncAdminEntry(){
   if(urlWant){ try{ localStorage.setItem("picnic_admin_entry", "1"); }catch(e){} }
   const want = urlWant || flag;
   $("adminTabBtn").classList.toggle("hidden", !want && !($("tab-admin") && !$("tab-admin").classList.contains("hidden")));
-  if(urlWant && $("tab-admin").classList.contains("hidden")) $("adminTabBtn").click();
+  $("checkinTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && $("tab-checkin").classList.contains("hidden"));
+  if(urlWant && $("tab-admin").classList.contains("hidden") && $("tab-checkin").classList.contains("hidden")) $("adminTabBtn").click();
 }
 window.addEventListener("hashchange", syncAdminEntry);
 if(!Store.remote) $("pwCard").classList.add("hidden");
