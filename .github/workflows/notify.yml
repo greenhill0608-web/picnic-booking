@@ -1,13 +1,14 @@
 name: Email notification for bookings
 
-# 有人預約（新增 Issue）或取消（關閉 Issue）時，自動寄 email 通知。
+# 有人預約（新增 Issue）、取消（關閉 Issue）或客人自行修改預約（編輯 Issue）時，自動寄 email 通知。
+# 後台人員編輯（報到、取餐、押金、備註…）不會寄信；只有「客人自己修改」才會。
 # 需要在 Settings → Secrets and variables → Actions 設定：
 #   NOTIFY_TO  收通知的 email（多個用逗號分隔，例如 service@company.com,boss@company.com）
 #   SMTP_USER  寄件的 Gmail 帳號
 #   SMTP_PASS  該 Gmail 的「應用程式密碼」（16 碼，不是登入密碼）
 on:
   issues:
-    types: [opened, closed]
+    types: [opened, closed, edited]
 
 permissions:
   contents: read
@@ -15,8 +16,8 @@ permissions:
 
 jobs:
   notify:
-    # 只處理標題為 [預約] 且由 repo 擁有者（預約權杖）建立／關閉的 Issue，避免陌生人亂開 Issue 造成垃圾信；現場客（代號含「現場」）不寄信
-    if: startsWith(github.event.issue.title, '[預約]') && github.actor == github.repository_owner && !contains(github.event.issue.title, ' 現場')
+    # 只處理標題為 [預約] 且由 repo 擁有者（預約權杖）建立／關閉的 Issue，避免陌生人亂開 Issue 造成垃圾信；現場客、住宿客（代號含「現場」「住宿」）不寄信
+    if: startsWith(github.event.issue.title, '[預約]') && github.actor == github.repository_owner && !contains(github.event.issue.title, ' 現場') && !contains(github.event.issue.title, ' 住宿')
     runs-on: ubuntu-latest
     steps:
       - name: Send email
@@ -44,8 +45,23 @@ jobs:
           except Exception:
               b = {}
 
+          changes = []
+          if action == "edited":
+              # 只有「客人自行修改」才寄信：最後一筆修改紀錄的修改人是「客人」，且時間與這次編輯相差在 3 分鐘內
+              from datetime import datetime
+              hist = b.get("history") or []
+              last = hist[-1] if hist and isinstance(hist[-1], dict) else {}
+              try:
+                  gap = abs((datetime.fromisoformat(str(issue["updated_at"]).replace("Z", "+00:00")) - datetime.fromisoformat(str(last["at"]).replace("Z", "+00:00"))).total_seconds())
+              except Exception:
+                  gap = 1e9
+              if last.get("by") != "客人" or gap > 180 or issue.get("state") == "closed":
+                  print("非客人修改（或預約已取消），略過寄信")
+                  sys.exit(0)
+              changes = [c for c in (last.get("changes") or []) if isinstance(c, dict)]
+
           cancelled = action == "closed"
-          head = "預約取消" if cancelled else "新預約"
+          head = "預約取消" if cancelled else ("預約變更" if action == "edited" else "新預約")
           lines = [f"【{head}】{issue['title'].replace('[預約]', '').strip()}", ""]
           if b:
               people = f"大人 {b.get('adults', 0)}・孩童 {b.get('children', 0)}"
@@ -63,6 +79,8 @@ jobs:
                   f"預約代號：{b.get('code', '')}",
               ]
               if b.get("note"): lines.append(f"備註：{b['note']}")
+          if changes:
+              lines += ["", "客人修改了以下項目："] + [f"．{c.get('f', '')}：{c.get('from', '')} → {c.get('to', '')}" for c in changes]
           if cancelled:
               lines += ["", "此預約已被取消（客人自行取消、後台取消，或同時預約時名額不足而自動取消）。"]
           lines += ["", f"詳細資料：{issue['html_url']}"]
@@ -90,7 +108,7 @@ jobs:
           em = str(b.get("email", ""))
           t = re.match(r"^\[預約\] (\d{4}-\d{2}-\d{2}) (\S{1,12}) (\d{9})$", issue["title"])
           if (b.get("emailOpt") is True and re.fullmatch(r"[^\s@,;<>]{1,64}@[^\s@,;<>]{1,200}\.[^\s@,;<>]{1,20}", em)
-                  and t and re.fullmatch(r"\d{2}:\d{2}", str(b.get("arrival", ""))) and action in ("opened", "closed")):
+                  and t and re.fullmatch(r"\d{2}:\d{2}", str(b.get("arrival", ""))) and action in ("opened", "closed", "edited")):
               repo = os.environ.get("GITHUB_REPOSITORY", "/")
               owner_, name_ = repo.split("/", 1)
               site = f"https://{owner_}.github.io/" + ("" if name_.lower() == f"{owner_}.github.io".lower() else name_ + "/")
@@ -103,6 +121,9 @@ jobs:
                   if cancelled:
                       body = ["您好，您的預約已取消：", ""] + detail[:1] + [detail[-1], "", "如有疑問，歡迎與我們聯絡。"]
                       subj = f"【預約取消】{t.group(1)}"
+                  elif action == "edited":
+                      body = ["您好，您的預約已更新，最新內容如下：", ""] + detail + ["", f"如需再次修改或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
+                      subj = f"【預約變更通知】{t.group(1)}"
                   else:
                       body = ["您好，您的預約已成立：", ""] + detail + ["", "📸 請截圖留存預約完成畫面作為憑證，入園時請出示。",
                               f"如需查詢或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
