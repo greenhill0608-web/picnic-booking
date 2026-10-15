@@ -74,6 +74,10 @@
       }
     }
   },
-  "overrides": {},
+  "overrides": {
+    "2026-10-28": {
+      "open": false
+    }
+  },
   "noPets": []
 }
