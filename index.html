@@ -93,6 +93,8 @@
   .done-panel .price{text-align:left;font-size:14px;margin:8px 0 12px;padding:10px 12px;background:#fff;border:1px dashed var(--line);border-radius:10px}
   .cap-banner{margin:8px 0;padding:10px 12px;border-radius:10px;font-size:14px;background:#fff6dc;border:1px solid #ecd58a;color:#5a4a12}
   .cap-banner.red{background:#fde8e4;border-color:#e3a99f;color:#7a2a1c}
+  .prepay{margin-top:6px;padding:6px 10px;border-radius:8px;background:#fff6dc;border:1px solid #ecd58a;font-size:14px}
+  .prepay.paid{background:#e6f4ea;border-color:#9fd1ab;color:#14532d}
   .kit-row{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;background:#fff}
   .kit-row.done{background:#f3f8f4}
   .kit-row .top{display:flex;justify-content:space-between;gap:8px;font-weight:600;flex-wrap:wrap}
@@ -649,6 +651,7 @@
           <select id="kFilter">
             <option value="all">全部</option>
             <option value="notPicked">尚未取餐</option>
+            <option value="unpaid">訂金未付</option>
             <option value="dep">押金待退</option>
           </select></div>
         <div style="display:flex;align-items:flex-end"><button class="btn ghost small" id="kClear" style="margin:0 0 2px">清除篩選</button></div>
@@ -704,6 +707,7 @@
       <div><label for="edAddon">加購數量</label><input id="edAddon" type="number" min="0"></div>
       <div><label for="edTotal">預估金額（元）</label><input id="edTotal" type="number" min="0"></div>
     </div>
+    <label class="inline" id="edPaidRow"><input type="checkbox" id="edDepositPaid"><span id="edPaidText">已付訂金</span></label>
     <div class="hint" id="edCalc" style="margin:4px 0"></div>
     <div class="grid2">
       <div><label for="edName">姓名</label><input id="edName" maxlength="30"></div>
@@ -1770,7 +1774,7 @@ function bookingCard(b, admin){
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}</div>
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
-    ${!cancelled && depositDue(b.addonQty || 0) ? (admin ? `<div class="adm-note">💰 套組 ${b.addonQty} 組：需訂金 ${money(depositDue(b.addonQty))}（客人匯款後會經 LINE 回報）</div>` : depositHtml(b.addonQty)) : ""}
+    ${!cancelled && depositDue(b.addonQty || 0) ? (admin ? prepayHtml(b) : depositHtml(b.addonQty)) : ""}
     ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
     ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
     ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
@@ -1831,6 +1835,9 @@ function editCalc(){
   return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate - addonDiscount(e.adults, e.addonQty);
 }
 function updateEditCalc(){
+  const q = Number($("edAddon").value) || 0, due = depositDue(q), lg = editingId && (Store.all().find(x => x.id === editingId) || {}).lodging;
+  $("edPaidRow").classList.toggle("hidden", !due || !!lg);
+  $("edPaidText").textContent = `已付訂金（需訂金 ${money(due)}）`;
   const c = editCalc();
   $("edCalc").textContent = c === null ? "" : `依目前價格試算：${money(c)}（修改人數、加購、毛小孩或日期後，可按「套用試算金額」；也可直接手動輸入）`;
 }
@@ -1849,6 +1856,7 @@ function openEdit(id){
   $("edStatus").value = b.status;
   $("edAdults").value = b.adults; $("edChildren").value = b.children; $("edPets").value = petsOf(b); $("edCars").value = carsOf(b);
   $("edAddon").value = b.addonQty || 0; $("edTotal").value = b.total || 0;
+  $("edDepositPaid").checked = !!kitOf(b).depositPaid;
   $("edName").value = b.name || ""; $("edPhone").value = b.phone || ""; $("edEmail").value = b.email || "";
   $("edNote").value = b.note || ""; $("edAdminNote").value = b.adminNote || "";
   $("edForce").checked = false; msg($("edMsg"), "", "");
@@ -1878,8 +1886,10 @@ async function saveEdit(){
     const was = k === "pets" ? petsOf(old) : k === "cars" ? carsOf(old) : k === "session" ? sessionOf(old) : (old[k] ?? (typeof e[k] === "number" ? 0 : ""));
     if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
   });
+  const paidNow = $("edDepositPaid").checked;
+  if(!!kitOf(old).depositPaid !== paidNow) changes.push({ f:"套組：已付訂金", from:kitOf(old).depositPaid ? "是" : "否", to:paidNow ? "是" : "否" });
   if(!changes.length) return msg(out, "沒有任何變更", "err");
-  const nb = Object.assign({}, old, e, { updatedAt:new Date().toISOString(),
+  const nb = Object.assign({}, old, e, { kit:Object.assign({}, kitOf(old), { depositPaid:paidNow }), updatedAt:new Date().toISOString(),
     history:(Array.isArray(old.history) ? old.history : []).concat([{ at:new Date().toISOString(), by:"管理員", changes }]) });
   $("edSave").disabled = true; msg(out, "儲存中…", "ok");
   const r = await Store.updateBooking(old.id, nb);
@@ -1891,7 +1901,15 @@ async function saveEdit(){
 }
 /* ========= 後台：野餐套組追蹤（報到／取餐／押金）========= */
 // 資料存在每筆預約的 kit 欄位：{ checkedIn, pickedUp, deposit, depositReturned }
-const kitOf = b => Object.assign({ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false }, b.kit || {});
+const kitOf = b => Object.assign({ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false, depositPaid:false }, b.kit || {});
+// 訂金（預約時，套組達一定組數需先匯款）狀態文字：kit-row／報到頁共用
+function prepayHtml(b){
+  const due = b.lodging ? 0 : depositDue(b.addonQty || 0); if(!due) return "";
+  const paid = kitOf(b).depositPaid;
+  return paid
+    ? `<div class="prepay paid">💰 已付訂金 ${money(due)}　<b>現場結帳請扣除</b>${b.total ? `（預估總額 ${money(b.total)} → 現場應收 ${money(Math.max(0, b.total - due))}）` : ""}</div>`
+    : `<div class="prepay">⏳ 需訂金 ${money(due)}，<b>尚未付訂金</b></div>`;
+}
 function renderKit(){
   if(!$("kitList")) return;
   const logged = isAdminLogged();
@@ -1903,17 +1921,21 @@ function renderKit(){
   let list = f ? all.filter(b => b.date === f) : all;
   const ss = $("kSession").value; if(ss) list = list.filter(b => b.lodging ? (!b.session || b.session === ss) : sessionOf(b) === ss);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
+  if(flt === "unpaid") list = list.filter(b => !b.lodging && depositDue(b.addonQty || 0) > 0 && !kitOf(b).depositPaid);
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
-  $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}`;
+  const paidSum = list.reduce((n, b) => n + (!b.lodging && kitOf(b).depositPaid ? depositDue(b.addonQty || 0) : 0), 0);
+  $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}` + (paidSum ? `；已收訂金合計 ${money(paidSum)}（結帳需扣除）` : "");
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
     const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">🛏 住宿客</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
       <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}${b.lodging && b.note ? `・${esc(b.note)}` : ""}</div>
+      ${prepayHtml(b)}
       <div class="kit-ctl">
+        ${!b.lodging && depositDue(b.addonQty) ? `<label class="inline"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金</span></label>` : ""}
         <label class="inline"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
         <span class="kit-dep">押金 NT$ <input type="number" min="0" step="10" inputmode="numeric" data-kf="deposit" value="${k.deposit || ""}" placeholder="0"></span>
         <label class="inline"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
@@ -1929,10 +1951,10 @@ async function saveKit(id, field, raw, el){
     if(!Number.isInteger(v) || v < 0){ toast("押金請輸入 0 以上的整數", "err"); return renderKit(); }
     k.deposit = v; if(v === 0) k.depositReturned = false;
   } else k[field] = !!raw;
-  const names = { checkedIn:"套組：已報到", pickedUp:"套組：已取餐", deposit:"套組：押金", depositReturned:"套組：押金已退" };
+  const names = { checkedIn:"套組：已報到", pickedUp:"套組：已取餐", depositPaid:"套組：已付訂金", deposit:"套組：押金", depositReturned:"套組：押金已退" };
   const yn = v => v ? "是" : "否";
   const changes = [];
-  ["checkedIn","pickedUp","depositReturned"].forEach(f => { if(cur[f] !== k[f]) changes.push({ f:names[f], from:yn(cur[f]), to:yn(k[f]) }); });
+  ["checkedIn","pickedUp","depositPaid","depositReturned"].forEach(f => { if(cur[f] !== k[f]) changes.push({ f:names[f], from:yn(cur[f]), to:yn(k[f]) }); });
   if(cur.deposit !== k.deposit) changes.push({ f:names.deposit, from:cur.deposit, to:k.deposit });
   if(!changes.length) return renderKit();
   if(field === "depositReturned" && k.depositReturned && !(k.deposit > 0)){ toast("請先填寫押金金額", "err"); return renderKit(); }
@@ -2197,6 +2219,7 @@ function ciSearch(){
       <div class="ci-total"><span>門票總金額</span><b data-total>${money(ticketTotal(b.date, b.adults, b.children, petsOf(b)))}</b></div>
       <div class="ci-fine">不含野餐套組費用</div>
       <div class="ci-kit"><span>野餐套組</span><b>${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}（費用另計）` : "無"}</b></div>
+      ${prepayHtml(b)}
       ${b.adminNote ? `<div class="adm-note">📝 ${esc(b.adminNote)}</div>` : ""}
       <button class="btn ci-btn" data-ci-save>${k.checkedIn ? "更新人數" : "確認報到"}</button>
     </div>`;
