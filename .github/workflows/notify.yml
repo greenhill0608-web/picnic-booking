@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 jobs:
   notify:
@@ -23,6 +24,7 @@ jobs:
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
           import json, os, re, smtplib, sys
@@ -65,8 +67,22 @@ jobs:
               lines += ["", "此預約已被取消（客人自行取消、後台取消，或同時預約時名額不足而自動取消）。"]
           lines += ["", f"詳細資料：{issue['html_url']}"]
 
+          # 資料量提醒：預約（Issue）累積到 2400 筆（上限 3000 的 80%）以上，在通知信加上警告
+          warn = ""
+          try:
+              import urllib.request
+              rq = urllib.request.Request(
+                  "https://api.github.com/search/issues?per_page=1&q=" + "repo:" + os.environ.get("GITHUB_REPOSITORY", "") + "+is:issue",
+                  headers={"Authorization": "Bearer " + os.environ.get("GH_TOKEN", ""), "Accept": "application/vnd.github+json"})
+              total = json.load(urllib.request.urlopen(rq, timeout=20)).get("total_count", 0)
+              if total >= 2400:
+                  warn = f"⚠️【資料量提醒】預約資料已累積 {total} 筆（後台上限 3000 筆）。請登入後台先匯出 CSV，再用「清理舊資料」刪除已過去的日期區間。"
+                  lines = [warn, ""] + lines
+          except Exception as ex:
+              print("::warning::讀取資料量失敗，略過提醒：", ex)
+
           msg = EmailMessage()
-          msg["Subject"] = f"【{head}】{b.get('date', '')} {b.get('name', '')}".strip()
+          msg["Subject"] = ("【資料量將滿】" if warn else "") + f"【{head}】{b.get('date', '')} {b.get('name', '')}".strip()
           msg["From"], msg["To"] = user, ", ".join(to)
           msg.set_content("\n".join(lines))
           # 客人通知：只有客人填了 email 並勾選「寄送預約成功通知」才寄；內容只用經過格式檢查的欄位（不放姓名、備註），避免被拿來寄垃圾信
