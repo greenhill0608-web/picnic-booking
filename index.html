@@ -607,6 +607,20 @@
       <div class="hint">請先登入管理後台，才能使用。</div>
       <button class="btn" id="kitGoAdmin">前往管理後台登入</button>
     </div>
+    <details class="card fold" id="lodgeCard">
+      <summary><h2>新增住宿客人的套組預約</h2></summary>
+      <div class="hint" style="margin:0 0 8px">住宿客人訂的野餐套組只在這裡追蹤，<b>不計入當日入園人數、名額與每日統計</b>。</div>
+      <div class="grid2">
+        <div><label for="lgDate" style="margin-top:0">用餐日期</label><input type="date" id="lgDate"></div>
+        <div><label for="lgSession" style="margin-top:0">場次（可不指定）</label><select id="lgSession"></select></div>
+        <div><label for="lgName">姓名／房號</label><input id="lgName" type="text" maxlength="30" placeholder="例：王先生／201 房"></div>
+        <div><label for="lgPhone">電話（可留空）</label><input id="lgPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="09xxxxxxxx"></div>
+        <div><label for="lgQty">套組數量</label><select id="lgQty"></select></div>
+        <div><label for="lgNote">備註（可留空）</label><input id="lgNote" type="text" maxlength="60"></div>
+      </div>
+      <button class="btn" id="lgAdd">新增</button>
+      <div id="lgMsg"></div>
+    </details>
     <div class="card" id="kitMain">
       <h2>野餐套組追蹤（報到・取餐・押金）</h2>
       <div class="hint" style="margin:0 0 8px">只列出有加購野餐套組、且未取消的預約。勾選或輸入後會立即儲存，並記錄在該筆預約的修改歷史。</div>
@@ -632,6 +646,32 @@
 
 <footer id="footerBox"></footer>
 
+<div class="modal-overlay hidden" id="cuModal" role="dialog" aria-modal="true" aria-labelledby="cuTitle">
+  <div class="edit-box">
+    <h2 id="cuTitle">修改預約</h2>
+    <div class="hint" id="cuSub" style="margin:0 0 8px"></div>
+    <div class="grid2">
+      <div><label for="cuDate">入園日期</label><input id="cuDate" type="date"></div>
+      <div><label for="cuSession">場次</label><select id="cuSession"></select></div>
+      <div><label for="cuArrival">預計抵達</label><select id="cuArrival"></select></div>
+      <div><label for="cuCars">車輛</label><select id="cuCars"></select></div>
+      <div><label for="cuAdults">大人</label><select id="cuAdults"></select></div>
+      <div><label for="cuChildren">孩童</label><select id="cuChildren"></select></div>
+      <div><label for="cuPets">毛小孩</label><select id="cuPets"></select></div>
+      <div><label for="cuAddon" id="cuAddonLabel">野餐套組</label><select id="cuAddon"></select></div>
+    </div>
+    <label for="cuEmail">電子信箱（選填）</label><input id="cuEmail" type="email" autocomplete="email">
+    <label class="inline"><input type="checkbox" id="cuEmailOpt"><span>寄送預約變更通知到這個信箱</span></label>
+    <label for="cuNote">備註</label><input id="cuNote" type="text" maxlength="100">
+    <div class="price" id="cuPrice" style="margin-top:12px"></div>
+    <div id="cuMsg"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn" id="cuSave" style="margin-top:0">儲存修改</button>
+      <button class="btn ghost" id="cuClose" style="margin-top:0">取消</button>
+    </div>
+    <div class="hint">姓名、手機與預約代號無法修改；若要改，請取消後重新預約。當天或已過的預約請來電。</div>
+  </div>
+</div>
 <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
   <div class="edit-box">
     <h2 id="editTitle">編輯預約</h2>
@@ -996,6 +1036,37 @@ const Store = {
     const b = list.find(x => x.id === id);
     if(b){ b.status = "cancelled"; if(!this.remote) this.saveAll(list); }
     return b;
+  },
+  // 客人自行修改預約：重新讀取 → 檢查名額（本筆原本佔用的不算）→ 寫入 → 再核對，若剛好被別人搶走名額就還原
+  async customerUpdate(old, nb){
+    const need = nb.adults + nb.children;
+    const free = () => {
+      const c = dayRule(nb.date, this.settings()).sessions[nb.session];
+      const cap = c && c.open ? c.cap : 0;
+      const mine = (old.status === "confirmed" && old.date === nb.date && sessionOf(old) === nb.session) ? old.adults + old.children : 0;
+      return cap - (this.used(nb.date, nb.session) - mine);
+    };
+    try{
+      if(this.remote){ await this.load(); if(this.truncated) return { ok:false, error:"系統資料量已達上限，暫時無法修改，請聯絡店家" }; }
+      const cur = this.all().find(x => x.id === old.id);
+      if(!cur) return { ok:false, error:"找不到這筆預約" };
+      if(cur.status !== "confirmed") return { ok:false, error:"這筆預約已取消，無法修改" };
+      const changedSlot = nb.date !== cur.date || nb.session !== sessionOf(cur) || need > cur.adults + cur.children;
+      if(changedSlot && need > free()) return { ok:false, error:`該場次剩餘名額 ${Math.max(0, free())} 位，不足以容納 ${need} 位，請調整人數或改選其他場次` };
+      const keep = Object.assign({}, cur);
+      const res = await this.updateBooking(old.id, Object.assign({}, nb, { kit:cur.kit, adminNote:cur.adminNote }));
+      if(!res.ok) return res;
+      if(this.remote && changedSlot){
+        await this.load();
+        const cap = dayRule(nb.date, this.settings()).sessions[nb.session].cap;
+        const mine = this.all().find(x => x.id === old.id);
+        let sum = 0, over = false;
+        this.all().filter(x => x.status === "confirmed" && x.date === nb.date && sessionOf(x) === nb.session)
+          .sort((x, y) => x.issue - y.issue).forEach(x => { sum += x.adults + x.children; if(mine && x.issue === mine.issue && sum > cap) over = true; });
+        if(over){ await this.updateBooking(old.id, keep); await this.load(); return { ok:false, error:"很抱歉，剛好有人先預約，該場次名額已不足，已保留您原本的預約" }; }
+      }
+      return { ok:true };
+    }catch(e){ return { ok:false, error:"修改失敗：" + e.message }; }
   },
   // 後台修改預約（含狀態）。nb 是修改後的完整預約物件，history 已附在 nb.history 裡
   async updateBooking(id, nb){
@@ -1506,7 +1577,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); makeFoldable();
+  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); makeFoldable(); bindCustomerEdit();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("hideEntryBtn").addEventListener("click", () => {
@@ -1652,6 +1723,7 @@ function bookingCard(b, admin){
   <div class="booking ${cancelled?"cancelled":""}">
     <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled?"已取消":"已確認"}</span></div>
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
+    ${b.lodging ? `<div><b>🛏 住宿客（僅套組追蹤，不計入入園人數）</b></div>` : ""}
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}</div>
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
@@ -1660,6 +1732,7 @@ function bookingCard(b, admin){
     ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
+      ${!admin && !cancelled && b.date > todayStr() && !b.lodging ? `<button class="btn small" data-cedit="${esc(b.id)}">修改預約</button>` : ""}
       ${!cancelled && upcoming ? `<button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button>` : ""}
     </div>
   </div>`;
@@ -1744,9 +1817,9 @@ async function saveEdit(){
   const e = readEdit();
   if(!e.date) return msg(out, "請選擇日期", "err");
   if(![e.adults, e.children, e.pets, e.cars, e.addonQty, e.total].every(x => Number.isInteger(x) && x >= 0)) return msg(out, "人數、毛小孩、車輛、加購與金額請輸入 0 以上的整數", "err");
-  if(e.adults + e.children < 1) return msg(out, "大人與孩童合計至少 1 位", "err");
+  if(!old.lodging && e.adults + e.children < 1) return msg(out, "大人與孩童合計至少 1 位", "err");
   if(!e.name) return msg(out, "請填寫姓名", "err");
-  if(!(old.walkin && e.phone === "") && !/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
+  if(!((old.walkin || old.lodging) && e.phone === "") && !/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
   if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return msg(out, "電子信箱格式不正確（可留空）", "err");
   // 名額檢查：扣掉這筆原本佔用的人數
   if(e.status === "confirmed" && !$("edForce").checked){
@@ -1778,14 +1851,14 @@ const kitOf = b => Object.assign({ checkedIn:false, pickedUp:false, deposit:0, d
 function renderKit(){
   if(!$("kitList")) return;
   const logged = isAdminLogged();
-  $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged);
+  $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged); $("lodgeCard").classList.toggle("hidden", !logged);
   if(!logged) return;
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
   let list = f ? all.filter(b => b.date === f) : all;
-  const ss = $("kSession").value; if(ss) list = list.filter(b => sessionOf(b) === ss);
-  if(flt === "notIn") list = list.filter(b => !kitOf(b).checkedIn);
+  const ss = $("kSession").value; if(ss) list = list.filter(b => b.lodging ? (!b.session || b.session === ss) : sessionOf(b) === ss);
+  if(flt === "notIn") list = list.filter(b => !b.lodging && !kitOf(b).checkedIn);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
@@ -1793,12 +1866,12 @@ function renderKit(){
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}`;
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
-    const done = k.checkedIn && k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
+    const done = (k.checkedIn || b.lodging) && k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
-      <div class="top"><span>${esc(showDate(b.date))} ${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
-      <div>${esc(b.name)}　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>・代號 ${esc(b.code)}</div>
+      <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">🛏 住宿客</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
+      <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}${b.lodging && b.note ? `・${esc(b.note)}` : ""}</div>
       <div class="kit-ctl">
-        <label class="inline"><input type="checkbox" data-kf="checkedIn" ${k.checkedIn ? "checked" : ""}><span>已報到</span></label>
+        ${b.lodging ? "" : `<label class="inline"><input type="checkbox" data-kf="checkedIn" ${k.checkedIn ? "checked" : ""}><span>已報到</span></label>`}
         <label class="inline"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
         <span class="kit-dep">押金 NT$ <input type="number" min="0" step="10" inputmode="numeric" data-kf="deposit" value="${k.deposit || ""}" placeholder="0"></span>
         <label class="inline"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
@@ -1829,10 +1902,39 @@ async function saveKit(id, field, raw, el){
   if(!res.ok) toast(res.error || "儲存失敗", "err"); else toast("已儲存", "ok");
   renderKit(); renderAdminList();
 }
+async function addLodging(btn){
+  const out = $("lgMsg"), date = $("lgDate").value, name = $("lgName").value.trim(), phone = $("lgPhone").value.trim();
+  const qty = +$("lgQty").value, sid = $("lgSession").value, note = $("lgNote").value.trim();
+  if(!date) return msg(out, "請選擇用餐日期", "err");
+  if(!name) return msg(out, "請填寫姓名或房號", "err");
+  if(phone && !/^09\d{8}$/.test(phone)) return msg(out, "電話請輸入 09 開頭共 10 碼，或留空", "err");
+  const now = new Date(), code = `住宿${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const ses = sessionById(sid);
+  const b = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), code, date, session:sid, arrival:"",
+    adults:0, children:0, addonQty:qty, pets:0, cars:0, name, phone, email:"", emailOpt:false, note,
+    petFee:0, total: qty * CONFIG.addon.price, status:"confirmed", lodging:true, createdAt:now.toISOString(),
+    kit:{ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false } };
+  btn.disabled = true; msg(out, "儲存中…", "ok");
+  try{
+    if(Store.remote){
+      await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${date} ${ses ? ses.label : "住宿客"} ${code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+      await Store.load();
+    } else { const list = Store.all(); list.push(b); Store.saveAll(list); }
+  }catch(e){ btn.disabled = false; return msg(out, "新增失敗：" + e.message, "err"); }
+  btn.disabled = false;
+  $("lgName").value = ""; $("lgPhone").value = ""; $("lgNote").value = ""; $("lgQty").value = "1";
+  msg(out, `✔ 已新增：${name}　${qty} ${CONFIG.addon.unit}`, "ok");
+  toast("住宿客套組已新增", "ok");
+  renderKit(); renderAdminList(); renderStats(); refreshBook();
+}
 function bindKit(){
   $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
   ["kDate","kSession","kFilter"].forEach(id => $(id).addEventListener("change", renderKit));
   $("kClear").addEventListener("click", () => { $("kDate").value = ""; $("kSession").value = ""; $("kFilter").value = "all"; renderKit(); });
+  $("lgSession").innerHTML = `<option value="">不指定</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
+  $("lgQty").innerHTML = Array.from({ length:20 }, (_, i) => `<option value="${i+1}">${i+1} ${esc(CONFIG.addon.unit)}</option>`).join("");
+  $("lgDate").value = todayStr();
+  $("lgAdd").addEventListener("click", e => addLodging(e.currentTarget));
   $("kitGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
   $("kitList").addEventListener("change", e => {
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
@@ -1843,7 +1945,7 @@ function bindKit(){
 function dailyRows(){
   const f = $("dyFrom").value, t = $("dyTo").value, inOnly = $("dyBasis").value === "in";
   const map = {};
-  Store.all().filter(b => b.status === "confirmed" && (!f || b.date >= f) && (!t || b.date <= t) && (!inOnly || kitOf(b).checkedIn)).forEach(b => {
+  Store.all().filter(b => !b.lodging && b.status === "confirmed" && (!f || b.date >= f) && (!t || b.date <= t) && (!inOnly || kitOf(b).checkedIn)).forEach(b => {
     const r = map[b.date] || (map[b.date] = { date:b.date, groups:0, adults:0, children:0, pets:0, fee:0 });
     r.groups++; r.adults += b.adults; r.children += b.children; r.pets += petsOf(b);
     r.fee += ticketTotal(b.date, b.adults, b.children, petsOf(b));
@@ -1894,6 +1996,118 @@ function makeFoldable(){
   $("foldAll").addEventListener("click", () => all(true));
   $("foldNone").addEventListener("click", () => all(false));
 }
+/* ========= 客人自行修改預約 ========= */
+let cuId = null;
+function cuRead(){
+  const n = id => Number($(id).value);
+  return { date:$("cuDate").value, session:$("cuSession").value, arrival:$("cuArrival").value, cars:n("cuCars"),
+    adults:n("cuAdults"), children:n("cuChildren"), pets:n("cuPets"), addonQty:n("cuAddon"),
+    email:$("cuEmail").value.trim(), note:$("cuNote").value.trim() };
+}
+function cuPrice(e){
+  const rate = petFeeOn(e.date) ? CONFIG.petFee : 0, disc = addonDiscount(e.adults, e.addonQty);
+  return { disc, pets:e.pets * rate, total: e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate - disc };
+}
+function cuRender(){
+  const b = Store.all().find(x => x.id === cuId); if(!b) return;
+  const e = cuRead(), S = Store.settings();
+  // 場次選項：顯示剩餘名額（本筆原本佔用的名額算回去）
+  const info = e.date ? dayInfo(e.date, S) : null;
+  const keepSame = e.date === b.date;
+  $("cuSession").innerHTML = SESSIONS.map(x => {
+    const rule = e.date ? dayRule(e.date, S).sessions[x.id] : null;
+    const mine = (keepSame && sessionOf(b) === x.id) ? b.adults + b.children : 0;
+    const left = rule && rule.open ? rule.cap - Store.used(e.date, x.id) + mine : 0;
+    return `<option value="${esc(x.id)}" ${rule && rule.open && left > 0 ? "" : "disabled"}>${esc(x.label)} ${esc(x.time)}${rule && rule.open ? `（剩 ${Math.max(0, left)} 位）` : "（未開放）"}</option>`;
+  }).join("");
+  $("cuSession").value = e.session; if($("cuSession").selectedOptions[0] && $("cuSession").selectedOptions[0].disabled){ const f = [...$("cuSession").options].find(o => !o.disabled); $("cuSession").value = f ? f.value : e.session; }
+  const sid = $("cuSession").value, cur = $("cuArrival").value;
+  const opts = arrivalOptions(sid); $("cuArrival").innerHTML = opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  $("cuArrival").value = opts.includes(cur) ? cur : (opts.includes(b.arrival) && sid === sessionOf(b) ? b.arrival : (opts[0] || ""));
+  const e2 = cuRead(), pr = cuPrice(e2);
+  $("cuPrice").innerHTML = `
+    <div class="line"><span>大人 ${e2.adults} × ${CONFIG.adultPrice}</span><span>${money(e2.adults * CONFIG.adultPrice)}</span></div>
+    <div class="line"><span>孩童 ${e2.children} × ${CONFIG.childPrice}</span><span>${money(e2.children * CONFIG.childPrice)}</span></div>
+    ${e2.addonQty ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${e2.addonQty} × ${CONFIG.addon.price}</span><span>${money(e2.addonQty * CONFIG.addon.price)}</span></div>` : ""}
+    ${pr.pets ? `<div class="line"><span>毛小孩 ${e2.pets} 隻</span><span>${money(pr.pets)}</span></div>` : ""}
+    ${pr.disc ? `<div class="line"><span>套組折抵</span><span>－${money(pr.disc)}</span></div>` : ""}
+    <div class="line total"><span>預估總金額</span><span>${money(pr.total)}</span></div>
+    <div class="credit">費用皆為現場收取</div>`;
+  const good = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e2.email);
+  $("cuEmailOpt").disabled = !good; if(!good) $("cuEmailOpt").checked = false;
+}
+function openCustomerEdit(id){
+  const b = Store.all().find(x => x.id === id); if(!b) return;
+  const S = Store.settings(), [, mx] = windowRange(S);
+  cuId = id;
+  $("cuSub").textContent = `預約代號 ${b.code}・${b.name}`;
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  $("cuDate").min = fmt(tomorrow); $("cuDate").max = mx > b.date ? mx : b.date;
+  $("cuDate").value = b.date;
+  const sel = (id, from, to, def, lab) => fillSelect($(id), from, to, def, lab);
+  sel("cuAdults", 0, S.maxPeoplePerBooking, b.adults, n => `${n} 位`);
+  sel("cuChildren", 0, S.maxPeoplePerBooking, b.children, n => `${n} 位`);
+  sel("cuPets", 0, CONFIG.maxPets, petsOf(b), n => `${n} 隻`);
+  sel("cuCars", 0, CONFIG.maxCars, carsOf(b), n => `${n} 輛`);
+  sel("cuAddon", 0, CONFIG.addon.max, b.addonQty || 0, n => n === 0 ? "不加購" : `${n} ${CONFIG.addon.unit}`);
+  $("cuAddonLabel").textContent = `加購 ${CONFIG.addon.name}`;
+  $("cuSession").innerHTML = `<option value="${esc(sessionOf(b))}"></option>`; $("cuSession").value = sessionOf(b);
+  $("cuArrival").innerHTML = `<option value="${esc(b.arrival)}"></option>`; $("cuArrival").value = b.arrival;
+  $("cuEmail").value = b.email || ""; $("cuEmailOpt").checked = !!b.emailOpt; $("cuNote").value = b.note || "";
+  msg($("cuMsg"), "", "");
+  cuRender(); $("cuEmailOpt").checked = !!b.emailOpt && !$("cuEmailOpt").disabled;
+  $("cuModal").classList.remove("hidden"); document.body.style.overflow = "hidden";
+}
+function closeCustomerEdit(){ $("cuModal").classList.add("hidden"); document.body.style.overflow = ""; cuId = null; }
+async function saveCustomerEdit(){
+  const out = $("cuMsg"), btn = $("cuSave"), old = Store.all().find(x => x.id === cuId); if(!old) return;
+  const e = cuRead(), S = Store.settings();
+  const fail = t => msg(out, t, "err");
+  if(!e.date) return fail("請選擇入園日期");
+  if(old.date <= todayStr()) return fail("當天或已過的預約無法線上修改，請來電");
+  if(e.adults + e.children < 1) return fail("大人與孩童合計至少 1 位");
+  if(e.adults + e.children > S.maxPeoplePerBooking) return fail(`單筆最多 ${S.maxPeoplePerBooking} 位，請分成兩張訂單`);
+  if(e.pets > 0 && isNoPetDay(e.date)) return fail("當天不開放寵物入園");
+  if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return fail("電子信箱格式不正確（可留空）");
+  const sameSlot = e.date === old.date && e.session === sessionOf(old);
+  if(!sameSlot || e.adults + e.children !== old.adults + old.children){
+    const info = dayInfo(e.date, S);
+    if(e.date !== old.date && (info.state === "out" || info.state === "closed")) return fail(info.why || "這個日期無法預約");
+    const rule = dayRule(e.date, S).sessions[e.session];
+    if(!rule || !rule.open) return fail("該日期的這個場次未開放");
+  }
+  if(!arrivalOptions(e.session).includes(e.arrival)) return fail("請選擇預計抵達時間");
+  const p = cuPrice(e);
+  const emailOpt = !!e.email && $("cuEmailOpt").checked;
+  const changes = [], show = (k, v) => k === "session" ? ((sessionById(v) || {}).label || v) : v;
+  [["date","日期"],["session","場次"],["arrival","預計抵達"],["adults","大人"],["children","孩童"],["pets","毛小孩"],["cars","車輛"],["addonQty","加購"],["email","Email"],["note","客人備註"]].forEach(([k, label]) => {
+    const was = k === "pets" ? petsOf(old) : k === "cars" ? carsOf(old) : k === "session" ? sessionOf(old) : (old[k] ?? (typeof e[k] === "number" ? 0 : ""));
+    if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
+  });
+  if(!!old.emailOpt !== emailOpt) changes.push({ f:"寄送通知", from:old.emailOpt ? "是" : "否", to:emailOpt ? "是" : "否" });
+  if(!changes.length) return fail("沒有任何變更");
+  const now = new Date().toISOString();
+  const nb = Object.assign({}, old, e, { emailOpt, petFee:p.pets, total:p.total, discount:p.disc, updatedAt:now,
+    history:(Array.isArray(old.history) ? old.history : []).concat([{ at:now, by:"客人", changes }]) });
+  btn.disabled = true; msg(out, "儲存中…", "ok");
+  const r = await Store.customerUpdate(old, nb);
+  btn.disabled = false;
+  if(!r.ok) return fail(r.error);
+  closeCustomerEdit();
+  doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; }
+  toast("預約已更新" + ((emailOpt && Store.remote) ? "，變更通知將寄到您的信箱" : ""), "ok");
+  refreshBook();
+}
+function bindCustomerEdit(){
+  $("qResult").addEventListener("click", e => { const b = e.target.closest("[data-cedit]"); if(b) openCustomerEdit(b.dataset.cedit); });
+  $("cuClose").addEventListener("click", closeCustomerEdit);
+  $("cuSave").addEventListener("click", saveCustomerEdit);
+  $("cuModal").addEventListener("click", e => { if(e.target === $("cuModal")) closeCustomerEdit(); });
+  ["cuDate","cuSession","cuAdults","cuChildren","cuPets","cuAddon","cuEmail"].forEach(id => $(id).addEventListener(id === "cuEmail" ? "input" : "change", () => {
+    if(id === "cuDate" || id === "cuSession") $("cuArrival").value = "";
+    cuRender();
+  }));
+}
 /* ========= 現場報到 ========= */
 const isAdminLogged = () => Store.remote ? !!GH.adminToken() : (sessionStorage.getItem("picnic_admin") === "1" || localStorage.getItem("picnic_admin_saved") === "1");
 function forgetAdmin(){ sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); try{ localStorage.removeItem("picnic_admin_saved"); }catch(e){} }
@@ -1926,7 +2140,7 @@ function ciSearch(){
   m.className = "ci-note";
   if(q.length < 5){ out.innerHTML = ""; m.textContent = q.length ? `再輸入 ${5 - q.length} 碼` : "輸入客人手機的最後 5 碼"; return; }
   const today = todayStr();
-  const list = Store.all().filter(b => b.status === "confirmed" && b.phone && b.phone.endsWith(q))
+  const list = Store.all().filter(b => !b.lodging && b.status === "confirmed" && b.phone && b.phone.endsWith(q))
     .filter(b => b.date >= today || (kitOf(b).checkedIn))
     .sort((a, b) => (a.date === today ? 0 : 1) - (b.date === today ? 0 : 1) || a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
   if(!list.length){ out.innerHTML = ""; m.className = "ci-note err"; m.textContent = "查無預約，請確認末 5 碼；若沒有預約請用下方「新增現場客」"; return; }
@@ -2152,7 +2366,7 @@ function addStat(s, b){
 function statsFor(date){
   const res = { total: zeroStat(), sessions: {} };
   SESSIONS.forEach(x => { res.sessions[x.id] = zeroStat(); });
-  Store.all().filter(b => b.status === "confirmed" && b.date === date).forEach(b => {
+  Store.all().filter(b => !b.lodging && b.status === "confirmed" && b.date === date).forEach(b => {
     const sid = sessionOf(b);
     addStat(res.sessions[sid] || (res.sessions[sid] = zeroStat()), b);
     addStat(res.total, b);
@@ -2161,7 +2375,7 @@ function statsFor(date){
 }
 function renderStats(){
   renderDaily();
-  const dates = [...new Set(Store.all().filter(b => b.status === "confirmed" && b.date >= todayStr()).map(b => b.date))].sort().slice(0, 14);
+  const dates = [...new Set(Store.all().filter(b => !b.lodging && b.status === "confirmed" && b.date >= todayStr()).map(b => b.date))].sort().slice(0, 14);
   let date = $("stDate").value;
   if(!date){ date = dates[0] || todayStr(); $("stDate").value = date; }
   $("stChips").innerHTML = dates.length
