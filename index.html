@@ -515,6 +515,7 @@
       <div class="card">
         <div class="hint" style="margin:0 0 8px">設定完成後，切到「線上預約」分頁就能預覽客人看到的月曆。</div>
         <button class="btn ghost" id="logoutBtn">登出</button>
+        <button class="btn ghost small" id="hideEntryBtn" style="margin-top:8px">在這台裝置隱藏後台入口</button>
         <button class="btn ghost" id="resetSettingsBtn">還原營業設定為預設值</button>
         <button class="btn danger" id="wipeBtn">清除所有資料（此瀏覽器）</button>
       </div>
@@ -1393,6 +1394,12 @@ function bind(){
   bindEdit(); bindPurge(); bindKit();
   $("ctSave").addEventListener("click", saveContent);
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
+  $("hideEntryBtn").addEventListener("click", () => {
+    try{ localStorage.removeItem("picnic_admin_entry"); }catch(e){}
+    sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token");
+    history.replaceState(null, "", location.pathname);
+    location.reload();
+  });
   $("logoutBtn").addEventListener("click", () => { sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
   $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
@@ -2028,9 +2035,14 @@ function exportCSV(list, filename){
 
 // 後台入口預設隱藏：網址後面加 #admin 才會出現（例：https://帳號.github.io/repo/#admin）
 function syncAdminEntry(){
-  const want = /^#admin$/i.test(location.hash);
+  // 網址加 #admin 或 ?admin 都可以；進入過一次後會記在這台裝置，下次直接顯示入口
+  // （有些瀏覽器／書籤／LINE 內建瀏覽器會把 # 後面的部分丟掉，所以另外提供 ?admin 與「記住此裝置」）
+  const flag = (() => { try{ return localStorage.getItem("picnic_admin_entry") === "1"; }catch(e){ return false; } })();
+  const urlWant = /^#admin$/i.test(location.hash) || /(^|[?&])admin(=|&|$)/i.test(location.search);
+  if(urlWant){ try{ localStorage.setItem("picnic_admin_entry", "1"); }catch(e){} }
+  const want = urlWant || flag;
   $("adminTabBtn").classList.toggle("hidden", !want && !($("tab-admin") && !$("tab-admin").classList.contains("hidden")));
-  if(want && $("tab-admin").classList.contains("hidden")) $("adminTabBtn").click();
+  if(urlWant && $("tab-admin").classList.contains("hidden")) $("adminTabBtn").click();
 }
 window.addEventListener("hashchange", syncAdminEntry);
 if(!Store.remote) $("pwCard").classList.add("hidden");
