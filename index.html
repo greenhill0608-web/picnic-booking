@@ -503,6 +503,16 @@
         <div class="hint">程式 CONFIG.noPetDates 內的預設日期會一併生效。</div>
       </div>
 
+      <div class="card hidden" id="importCard">
+        <h2>從舊系統匯入（GitHub Issues → 新後端）</h2>
+        <div class="hint" style="margin:0 0 8px">搬家時只需做一次：把舊的預約（存在 GitHub Issues）與營業設定搬到新的資料庫。可重複按，同一筆不會重複。</div>
+        <label for="imRepo" style="margin-top:0">舊系統的 GitHub repo（帳號/名稱）</label>
+        <input id="imRepo" placeholder="例：your-name/picnic-booking" autocomplete="off">
+        <label class="inline" style="margin-top:8px"><input type="checkbox" id="imSettings" checked><span>同時匯入營業設定（會覆蓋目前的設定）</span></label>
+        <button class="btn ghost" id="imBtn" style="margin-top:8px">開始匯入</button>
+        <div id="imMsg"></div>
+      </div>
+
       <div class="card" id="purgeCard">
         <h2>清理舊資料（刪除日期區間內的預約）</h2>
         <div class="hint" id="capInfo" style="margin:0 0 8px"></div>
@@ -570,8 +580,10 @@
         <div id="ctSessions"></div>
 
         <h3 class="sub">文字說明</h3>
-        <label for="ctInfo">入園資訊補充（一行一條；營業場次、預約期間、入園費會自動產生）</label>
-        <textarea id="ctInfo" rows="3"></textarea>
+        <label for="ctInfo">入園資訊（預約頁「入園資訊」方框的全部內容，一行一條，可任意修改、刪除、新增）</label>
+        <textarea id="ctInfo" rows="8"></textarea>
+        <div class="hint">裡面的 <code>{場次}</code>（每週開放場次）、<code>{期間}</code>（目前可預約的日期範圍）、<code>{天數}</code>（開放未來幾天）會自動換成最新內容；不想自動更新就直接改成文字。沒修改過時，票價等文字會跟著上方欄位自動更新。</div>
+        <button type="button" class="btn ghost small" id="ctInfoReset" style="margin-top:6px">還原為預設內容</button>
         <label for="ctNotices">注意事項（一行一條；<code>{max}</code> 會自動換成單筆人數上限）</label>
         <textarea id="ctNotices" rows="6"></textarea>
         <label for="ctPetRule">毛小孩規定（選擇毛小孩隻數時顯示）</label>
@@ -768,6 +780,7 @@ const CONFIG = {
     repo: "",                               // 例：picnic-booking
     token: "__GH_TOKEN__"                   // 由 GitHub Actions 部署時自動填入，請勿手動貼權杖
   },
+  apiUrl: "__API_URL__",                  // 後端（Cloudflare Worker）網址；由 GitHub Actions 部署時自動填入。有填就走後端，沒填則維持舊的 GitHub 模式／本機測試模式
   adminPassword: "admin1234",              // ⚠️ 前端密碼只是示範，請務必更換；正式環境需後端驗證
 
   // 每天的場次（要改場次時間、名稱改這裡；id 請勿重複）
@@ -838,9 +851,9 @@ const SESSIONS = CONFIG.sessions;
 const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
   childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
-  petRule: CONFIG.petRule, infoLines: CONFIG.infoLines, notices: CONFIG.notices, footer: CONFIG.footer,
+  petRule: CONFIG.petRule, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
   addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","infoLines","notices","footer"];
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","infoLines","infoFull","notices","footer"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   const D = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
@@ -914,6 +927,27 @@ const GH = {
   b64(s){ const u = new TextEncoder().encode(s); let t = ""; u.forEach(x => t += String.fromCharCode(x)); return btoa(t); }
 };
 
+/* ========= 後端 API（Cloudflare Worker + D1）=========
+   有設定 CONFIG.apiUrl 時，所有預約、查詢、後台操作都走這裡；名額與金額由伺服器重新檢查。 */
+const API = {
+  on(){ const u = CONFIG.apiUrl || ""; return !!u && !/^__.*__$/.test(u); },
+  async call(method, path, body, admin){
+    const h = {};
+    if(body !== undefined) h["Content-Type"] = "application/json";
+    if(admin){ const t = GH.adminToken(); if(t) h.Authorization = "Bearer " + t; }
+    let res;
+    try{ res = await fetch(CONFIG.apiUrl.replace(/\/+$/, "") + path, { method, headers:h, cache:"no-store", body: body === undefined ? undefined : JSON.stringify(body) }); }
+    catch(e){ throw new Error("無法連線到伺服器，請檢查網路後再試"); }
+    let j = {}; try{ j = await res.json(); }catch(e){}
+    if(res.status === 401 && admin){
+      try{ sessionStorage.removeItem("picnic_admin_token"); localStorage.removeItem("picnic_admin_saved"); }catch(e){}
+    }
+    if(!res.ok || j.ok === false){ const e = new Error(j.error || ("伺服器回應錯誤（" + res.status + "）")); e.status = res.status; throw e; }
+    return j;
+  }
+};
+const BACKEND = API.on() ? "伺服器" : "GitHub";
+
 /* ========= 管理員密碼：把「管理員權杖」用密碼加密後存成 repo 的 admin.json =========
    登入時在瀏覽器內用密碼解開權杖（PBKDF2 + AES-GCM）。安全性取決於密碼強度，請設定夠長的密碼。 */
 const Vault = {
@@ -941,7 +975,9 @@ const Store = {
   KEY: "picnic_bookings_v2",
   NOPET: "picnic_nopet_v2",
   SETTINGS: "picnic_settings_v4",
-  remote: GH.on(),
+  remote: GH.on() || API.on(),
+  api: API.on(),
+  _used: {},
   _b: [], _s: {}, _q: Promise.resolve(), onSync: null,
   read(k){ try{ const v = JSON.parse(localStorage.getItem(k)); return Array.isArray(v) ? v : []; }catch(e){ return []; } },
   all(){ return this.remote ? this._b : this.read(this.KEY); },
@@ -975,6 +1011,14 @@ const Store = {
   },
   // 後台設定寫回 repo 的 settings.json（排隊逐一寫入，避免互相覆蓋）
   persist(){
+    if(this.api){
+      const snap = this._s;
+      this._q = this._q.then(async () => {
+        try{ await API.call("PUT", "/api/admin/settings", { settings: snap }, true); this.onSync && this.onSync("設定已儲存 ✔", "ok"); }
+        catch(e){ this.onSync && this.onSync("設定儲存失敗：" + e.message, "err"); }
+      });
+      return this._q;
+    }
     const snap = JSON.stringify(this._s, null, 2);
     this._q = this._q.then(async () => {
       try{
@@ -987,6 +1031,13 @@ const Store = {
   },
   async load(){
     if(!this.remote) return;
+    if(this.api){
+      this.truncated = false;
+      const pub = await API.call("GET", "/api/public");
+      this._s = pub.settings || {}; this._used = pub.used || {};
+      if(GH.adminToken()){ this._b = (await API.call("GET", "/api/admin/bookings", undefined, true)).bookings || []; this.rawCount = this._b.length; }
+      return;
+    }
     const [bk, st] = await Promise.all([this.loadBookings(), this.loadSettings()]);
     this._b = bk; this._s = st;
   },
@@ -1021,6 +1072,7 @@ const Store = {
   },
   // 各「日期＋場次」已預約人數
   usedMap(){
+    if(this.api && !GH.adminToken()) return this._used || {};
     const m = {};
     this.all().forEach(b => {
       if(b.status !== "confirmed") return;
@@ -1043,6 +1095,10 @@ const Store = {
   },
   // GitHub 版：先重新讀取名額 → 建立 Issue → 再核對先後順序，超額的那一筆自動取消
   async addRemote(b){
+    if(this.api){
+      try{ await API.call("POST", "/api/book", b); await this.load(); return { ok:true }; }
+      catch(e){ try{ await this.load(); }catch(x){} return { ok:false, error:e.message }; }
+    }
     try{
       await this.load();
       if(this.truncated) return { ok:false, error:"系統資料量已達上限，暫時無法預約，請聯絡店家" };
@@ -1081,6 +1137,13 @@ const Store = {
       const mine = (old.status === "confirmed" && old.date === nb.date && sessionOf(old) === nb.session) ? old.adults + old.children : 0;
       return cap - (this.used(nb.date, nb.session) - mine);
     };
+    if(this.api){
+      try{
+        const r = await API.call("POST", "/api/update", { id: old.id, phone: old.phone, patch: nb });
+        if(r.booking){ const i = this._b.findIndex(x => x.id === old.id); if(i >= 0) this._b[i] = r.booking; }
+        await this.load(); return { ok:true };
+      }catch(e){ return { ok:false, error:e.message }; }
+    }
     try{
       if(this.remote){ await this.load(); if(this.truncated) return { ok:false, error:"系統資料量已達上限，暫時無法修改，請聯絡店家" }; }
       const cur = this.all().find(x => x.id === old.id);
@@ -1111,6 +1174,10 @@ const Store = {
       const list = this.all(), i = list.findIndex(x => x.id === id);
       list[i] = nb; this.saveAll(list); return { ok:true };
     }
+    if(this.api){
+      try{ const bk = Object.assign({}, nb); delete bk.issue; await API.call("PUT", "/api/admin/booking/" + encodeURIComponent(id), { booking: bk }, true); await this.load(); return { ok:true }; }
+      catch(e){ return { ok:false, error:"儲存失敗：" + e.message }; }
+    }
     try{
       const clean = Object.assign({}, nb); delete clean.issue; delete clean.status;
       const ses = sessionById(clean.session);
@@ -1132,6 +1199,17 @@ const Store = {
     if(!this.remote){
       const ids = new Set(list.map(b => b.id));
       this.saveAll(this.all().filter(b => !ids.has(b.id))); res.deleted = ids.size; return res;
+    }
+    if(this.api){
+      try{
+        const ids = list.map(b => b.id);
+        for(let i = 0; i < ids.length; i += 200){
+          const r = await API.call("POST", "/api/admin/purge", { ids: ids.slice(i, i + 200) }, true);
+          res.deleted += r.deleted; res.skipped += r.skipped;
+          onProgress && onProgress(Math.min(ids.length, i + 200), ids.length);
+        }
+      }catch(e){ res.failed = list.length - res.deleted; res.lastError = e.message; }
+      await this.load(); return res;
     }
     let canDelete = true;
     for(let i = 0; i < list.length; i++){
@@ -1155,9 +1233,22 @@ const Store = {
     await this.load();
     return res;
   },
+  // 後台／客人新增整筆預約（現場客、住宿客）
+  async createAdmin(b){
+    if(this.api){ await API.call("POST", "/api/admin/booking", { booking: b }, true); return; }
+    const ses = sessionById(b.session);
+    await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${b.date} ${ses ? ses.label : "住宿客"} ${b.code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+  },
   async cancelRemote(id){
     const b = this._b.find(x => x.id === id);
     if(!b) return { ok:false, error:"找不到這筆預約" };
+    if(this.api){
+      try{
+        if(GH.adminToken()){ const bk = Object.assign({}, b, { status:"cancelled" }); delete bk.issue; await API.call("PUT", "/api/admin/booking/" + encodeURIComponent(id), { booking: bk }, true); }
+        else await API.call("POST", "/api/cancel", { id, phone: b.phone });
+        await this.load(); return { ok:true };
+      }catch(e){ return { ok:false, error:"取消失敗：" + e.message }; }
+    }
     try{
       await GH.api("/issues/" + b.issue, { method:"PATCH", body:{ state:"closed", state_reason:"not_planned" } });
       await this.load(); return { ok:true };
@@ -1373,9 +1464,25 @@ function refreshBook(){
   renderPrice();
 }
 
+// 入園資訊的預設內容（含 {場次}{期間}{天數} 三個會自動更新的代號）；後台可整段改寫
+function autoInfoTemplate(){
+  return [
+    `開放場次：{場次}`,
+    `預約期間：目前開放 {期間}（未來 {天數} 天內）`,
+    `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : ""),
+    `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`
+  ].concat(CONFIG.petFee > 0 ? [`毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）`] : []).concat(CONFIG.infoLines);
+}
 function renderInfo(S){
   S = S || Store.settings();
   const [mn, mx] = windowRange(S);
+  const fill = l => String(l).split("{場次}").join(hoursSummary(S)).split("{期間}").join(`${mn} ～ ${mx}`).split("{天數}").join(S.maxAdvanceDays);
+  if(Array.isArray(CONFIG.infoFull)){
+    $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + CONFIG.infoFull.map(l => `<li>${esc(fill(l))}</li>`).join("") + "</ul>";
+    refreshPeople();
+    $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.map(l => `<li>${esc(l.replace("{max}", S.maxPeoplePerBooking))}</li>`).join("") + "</ul>";
+    return;
+  }
   const lines = [
     `開放場次：${hoursSummary(S)}`,
     `預約期間：目前開放 ${mn} ～ ${mx}（未來 ${S.maxAdvanceDays} 天內）`,
@@ -1554,8 +1661,8 @@ function bind(){
     document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
     ["book","lookup","admin","checkin","kit"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
     if(b.dataset.tab === "admin") openAdmin();
-    if(b.dataset.tab === "kit"){ renderKit(); if(Store.remote && GH.adminToken()) Store.load().then(renderKit).catch(e => toast("無法讀取 GitHub：" + e.message, "err")); }
-    if(b.dataset.tab === "checkin"){ renderCheckin(); if(Store.remote && GH.adminToken()) Store.load().then(renderCheckin).catch(e => toast("無法讀取 GitHub：" + e.message, "err")); }
+    if(b.dataset.tab === "kit"){ renderKit(); if(Store.remote && GH.adminToken()) Store.load().then(renderKit).catch(e => toast("無法讀取" + BACKEND + "：" + e.message, "err")); }
+    if(b.dataset.tab === "checkin"){ renderCheckin(); if(Store.remote && GH.adminToken()) Store.load().then(renderCheckin).catch(e => toast("無法讀取" + BACKEND + "：" + e.message, "err")); }
     if(b.dataset.tab === "book") refreshBook();
   }));
 
@@ -1596,6 +1703,15 @@ function bind(){
   });
   const rememberDevice = v => { try{ if($("rememberMe").checked) localStorage.setItem("picnic_admin_saved", v); else localStorage.removeItem("picnic_admin_saved"); }catch(e){} };
   $("adminLoginBtn").addEventListener("click", () => {
+    if(Store.api){
+      const pw = $("adminPw").value;
+      if(!pw) return msg($("adminMsg"), "請輸入密碼", "err");
+      msg($("adminMsg"), "驗證中…", "ok");
+      API.call("POST", "/api/admin/login", { password: pw, remember: $("rememberMe").checked })
+        .then(r => { sessionStorage.setItem("picnic_admin_token", r.token); rememberDevice(r.token); $("adminPw").value = ""; return openAdmin(); })
+        .catch(e => msg($("adminMsg"), e.message, "err"));
+      return;
+    }
     if(Store.remote){
       const pw = $("adminPw").value;
       if(!pw) return msg($("adminMsg"), "請輸入密碼", "err");
@@ -1637,6 +1753,7 @@ function bind(){
   });
   bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit();
   $("ctSave").addEventListener("click", saveContent);
+  $("ctInfoReset").addEventListener("click", () => { const el = $("ctInfo"); el.value = autoInfoTemplate().join("\n"); el.dataset.orig = el.value; el.dataset.auto = "1"; toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("hideEntryBtn").addEventListener("click", () => {
     try{ localStorage.removeItem("picnic_admin_entry"); }catch(e){}
@@ -1800,7 +1917,14 @@ function bookingCard(b, admin){
 const fmtTime = iso => { try{ const d = new Date(iso); const z = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }catch(e){ return String(iso || ""); } };
 
 function doLookup(){
-  if(Store.remote && !doLookup.fresh){ msg($("qMsg"), "查詢中…", "ok"); return Store.load().then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), "無法連線 GitHub：" + e.message, "err")); }
+  if(Store.api && !doLookup.fresh){
+    const ph = $("qPhone").value.trim(), cd = $("qCode").value.trim();
+    if(!/^09\d{8}$/.test(ph)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入正確的手機號碼", "err"); }
+    msg($("qMsg"), "查詢中…", "ok");
+    const job = GH.adminToken() ? Store.load() : API.call("POST", "/api/lookup", { phone: ph, code: cd }).then(r => { Store._b = r.bookings || []; });
+    return job.then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), e.message, "err"));
+  }
+  if(Store.remote && !Store.api && !doLookup.fresh){ msg($("qMsg"), "查詢中…", "ok"); return Store.load().then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), "無法連線 GitHub：" + e.message, "err")); }
   const phone = $("qPhone").value.trim();
   const code = $("qCode").value.trim().toUpperCase();
   if(!/^09\d{8}$/.test(phone)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入正確的手機號碼", "err"); }
@@ -1998,7 +2122,7 @@ async function addLodging(btn){
   btn.disabled = true; msg(out, "儲存中…", "ok");
   try{
     if(Store.remote){
-      await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${date} ${ses ? ses.label : "住宿客"} ${code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+      await Store.createAdmin(b);
       await Store.load();
     } else { const list = Store.all(); list.push(b); Store.saveAll(list); }
   }catch(e){ btn.disabled = false; return msg(out, "新增失敗：" + e.message, "err"); }
@@ -2306,7 +2430,7 @@ async function ciWalkAdd(btn){
   btn.disabled = true; msg(out, "儲存中…", "ok");
   try{
     if(Store.remote){
-      await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${date} ${ses.label} ${code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+      await Store.createAdmin(b);
       await Store.load();
     } else { const list = Store.all(); list.push(b); Store.saveAll(list); }
   }catch(e){ btn.disabled = false; return msg(out, "新增失敗：" + e.message, "err"); }
@@ -2338,6 +2462,7 @@ const CAP_LIMIT = 3000;
 function renderCapacity(){
   const b = $("capBanner"), info = $("capInfo");
   if(!Store.remote){ b.classList.add("hidden"); info.textContent = `目前共 ${Store.all().length} 筆預約（本機測試模式）。`; return; }
+  if(Store.api){ b.classList.add("hidden"); info.textContent = `目前共 ${Store.all().length} 筆預約。資料存在 Cloudflare D1（免費額度 5 GB，足夠儲存數十萬筆）；清理舊資料只是方便整理，不影響運作。`; return; }
   const n = Store.rawCount || Store.all().length, pct = Math.round(n / CAP_LIMIT * 100);
   info.textContent = `目前資料量：${n} / ${CAP_LIMIT} 筆（${pct}%）。超過 ${CAP_LIMIT} 筆後，後台只會顯示最新的 ${CAP_LIMIT} 筆，且客人端會暫停接受新預約。`;
   const level = n >= CAP_LIMIT * 0.95 ? "red" : n >= CAP_LIMIT * 0.8 ? "warn" : "";
@@ -2354,7 +2479,44 @@ function updatePurgeCount(){
   const { list, f, t } = purgeRange();
   $("pgCount").textContent = (f && t) ? (f > t ? "起始日不能晚於結束日" : `此區間共 ${list.length} 筆預約（有效 ${list.filter(b => b.status === "confirmed").length}、已取消 ${list.filter(b => b.status !== "confirmed").length}）`) : "請選擇日期區間";
 }
+// 從舊的 GitHub Issues 系統搬資料到後端（舊 repo 是公開的，不需要權杖）
+async function importFromGithub(){
+  const repo = $("imRepo").value.trim(), out = $("imMsg"), btn = $("imBtn");
+  if(!/^[\w.-]+\/[\w.-]+$/.test(repo)) return msg(out, "請輸入「帳號/名稱」，例如 your-name/picnic-booking", "err");
+  btn.disabled = true;
+  try{
+    const list = [];
+    for(let page = 1; page <= 40; page++){
+      msg(out, `讀取舊資料中…（第 ${page} 頁）`, "ok");
+      const res = await fetch(`https://api.github.com/repos/${repo}/issues?state=all&per_page=100&page=${page}`, { headers:{ Accept:"application/vnd.github+json" } });
+      if(!res.ok) throw new Error(res.status === 404 ? "找不到這個 repo（或它不是公開的）" : "GitHub 回應錯誤（" + res.status + "）");
+      const arr = await res.json();
+      arr.forEach(it => {
+        if(it.pull_request || !String(it.title).startsWith("[預約]")) return;
+        const m = /```json\s*([\s\S]*?)```/.exec(it.body || ""); if(!m) return;
+        try{ const b = JSON.parse(m[1]); b.status = it.state === "closed" ? "cancelled" : "confirmed"; delete b.issue; list.push(b); }catch(e){}
+      });
+      if(arr.length < 100) break;
+    }
+    let settings;
+    if($("imSettings").checked){
+      const r = await fetch(`https://api.github.com/repos/${repo}/contents/settings.json`, { headers:{ Accept:"application/vnd.github.raw+json" } });
+      if(r.ok){ try{ settings = JSON.parse(await r.text()); }catch(e){} }
+    }
+    let n = 0;
+    for(let i = 0; i < Math.max(list.length, 1); i += 100){
+      msg(out, `寫入新資料庫…（${Math.min(i + 100, list.length)} / ${list.length}）`, "ok");
+      const r = await API.call("POST", "/api/admin/import", { bookings: list.slice(i, i + 100), ...(i === 0 && settings ? { settings } : {}) }, true);
+      n += r.imported;
+    }
+    await Store.load(); applyContent(); renderStatic(); refreshBook(); renderAdmin();
+    msg(out, `✔ 已匯入 ${n} 筆預約${settings ? "與營業設定" : ""}。確認無誤後，請依 README 刪除舊 repo 的公開資料。`, "ok");
+  }catch(e){ msg(out, "匯入失敗：" + e.message, "err"); }
+  btn.disabled = false;
+}
 function bindPurge(){
+  $("imBtn").addEventListener("click", importFromGithub);
+  if(Store.api){ $("importCard").classList.remove("hidden"); try{ const m = /^([\w.-]+)\.github\.io\/([^/]+)/.exec(location.host + location.pathname); if(m) $("imRepo").value = m[1] + "/" + m[2]; }catch(e){} }
   const yday = new Date(); yday.setDate(yday.getDate() - 1);
   const ymax = `${yday.getFullYear()}-${String(yday.getMonth()+1).padStart(2,"0")}-${String(yday.getDate()).padStart(2,"0")}`;
   ["pgFrom","pgTo"].forEach(id => { $(id).max = ymax; $(id).addEventListener("change", updatePurgeCount); });
@@ -2403,7 +2565,8 @@ function renderContent(){
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
-  v("ctInfo", CONFIG.infoLines.join("\n")); v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule);
+  { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); el.value = (full ? CONFIG.infoFull : autoInfoTemplate()).join("\n"); el.dataset.orig = el.value; el.dataset.auto = full ? "0" : "1"; }
+   v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule);
   v("ctFooter", CONFIG.footer || ""); v("ctSiteName", CONFIG.siteName);
   $("ctSessions").innerHTML = SESSIONS.map(x => `
     <div class="scell" data-sid="${esc(x.id)}" style="margin-bottom:8px">
@@ -2423,7 +2586,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), infoLines:lines("ctInfo"), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : lines("ctInfo"), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
     sessions:{}
@@ -2454,7 +2617,7 @@ function saveContent(){
   if(bad) return msg(out, bad, "err");
   const S = Store.settings(); S.content = c; Store.saveSettings(S);
   applyContent(); renderStatic(); refreshBook(); renderContent();
-  msg(out, Store.remote ? "已儲存，正在寫入 GitHub…（完成後會顯示提示）" : "已儲存", "ok");
+  msg(out, Store.remote ? "已儲存，正在寫入" + BACKEND + "…（完成後會顯示提示）" : "已儲存", "ok");
 }
 function resetContent(){
   const S = Store.settings(); delete S.content; Store.saveSettings(S);
@@ -2463,7 +2626,7 @@ function resetContent(){
 
 function openAdmin(){
   if(!Store.remote || !GH.adminToken()) return renderAdmin();
-  return Store.load().then(renderAdmin).catch(e => { toast("無法讀取 GitHub：" + e.message, "err"); renderAdmin(); });
+  return Store.load().then(renderAdmin).catch(e => { toast("無法讀取" + BACKEND + "：" + e.message, "err"); renderAdmin(); });
 }
 function renderAdmin(){
   const logged = isAdminLogged();
@@ -2671,10 +2834,10 @@ function syncAdminEntry(){
   if(urlWant && $("tab-admin").classList.contains("hidden") && !sub) $("adminTabBtn").click();
 }
 window.addEventListener("hashchange", syncAdminEntry);
-if(!Store.remote) $("pwCard").classList.add("hidden");
+if(!Store.remote || Store.api) $("pwCard").classList.add("hidden");   // 後端模式的密碼設定在 Cloudflare，不在網頁內改
 if(Store.remote){
-  $("setupBox").classList.remove("hidden");
-  Store.load().then(init).catch(e => { init(); toast("無法讀取 GitHub 資料：" + e.message, "err"); }).then(syncAdminEntry);
+  if(!Store.api) $("setupBox").classList.remove("hidden");
+  Store.load().then(init).catch(e => { init(); toast("無法讀取" + BACKEND + "資料：" + e.message, "err"); }).then(syncAdminEntry);
 } else { init(); syncAdminEntry(); }
 </script>
 
