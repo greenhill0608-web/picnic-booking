@@ -1,0 +1,126 @@
+name: Daily reminders
+
+# 每天早上 09:00（台灣時間）自動寄「明日預約提醒」給隔天有預約、且填了 email 並勾選通知的客人（每筆只寄一次，住宿客不寄）。
+# 需要的設定與 notify.yml 相同：Variables 的 API_URL；Secrets 的 NOTIFY_SECRET、SMTP_USER、SMTP_PASS。
+# 也可以到 Actions 分頁手動執行（Run workflow），可指定日期。
+on:
+  schedule:
+    - cron: "0 1 * * *"      # UTC 01:00 = 台灣 09:00（GitHub 排程可能延遲數分鐘到一小時）
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "要處理的日期 YYYY-MM-DD（留空 = 明天）"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-reminders
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send reminders
+        env:
+          API_URL: ${{ vars.API_URL }}
+          SHOP_PHONE: ${{ vars.SHOP_PHONE }}
+          NOTIFY_SECRET: ${{ secrets.NOTIFY_SECRET }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          IN_DATE: ${{ github.event.inputs.date }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, smtplib, sys, urllib.request
+          from datetime import datetime, timedelta, timezone
+          from email.message import EmailMessage
+
+          # 注意：repo 是公開的，Actions 記錄任何人看得到，所以這裡不印出任何姓名、電話、email，只印筆數。
+          user, pw = os.environ.get("SMTP_USER", ""), os.environ.get("SMTP_PASS", "")
+          api, secret = os.environ.get("API_URL", "").rstrip("/"), os.environ.get("NOTIFY_SECRET", "")
+          if not (user and pw and api and secret):
+              print("::warning::尚未設定 API_URL / NOTIFY_SECRET / SMTP_USER / SMTP_PASS，略過")
+              sys.exit(0)
+
+          tw = timezone(timedelta(hours=8))
+          date = (os.environ.get("IN_DATE") or "").strip() or (datetime.now(tw) + timedelta(days=1)).strftime("%Y-%m-%d")
+          if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+              print("::error::日期格式不正確"); sys.exit(1)
+          shop_phone = (os.environ.get("SHOP_PHONE") or "0918273858").strip()
+          WEEK = "一二三四五六日"
+          wd = WEEK[datetime.strptime(date, "%Y-%m-%d").weekday()]
+
+          def call(path, data=None):
+              h = {"X-Notify-Secret": secret, "User-Agent": "picnic-daily"}
+              if data is not None: h["Content-Type"] = "application/json"
+              rq = urllib.request.Request(api + path, data=json.dumps(data).encode() if data is not None else None, headers=h)
+              return json.load(urllib.request.urlopen(rq, timeout=30))
+
+          try:
+              d = call("/api/internal/daily?date=" + date)
+          except Exception as ex:
+              print("::error::向後端取得資料失敗：", type(ex).__name__); sys.exit(1)
+
+          bks = d.get("bookings") or []
+          sess = {s["id"]: s["label"] for s in d.get("sessions", [])}
+          A = d.get("addon") or {}
+          n = lambda b, k: int(b.get(k, 0) or 0)
+          dep_from, dep_per = int(A.get("depositFrom", 0) or 0), int(A.get("depositPerSet", 0) or 0)
+          def dep_due(b):
+              q = n(b, "addonQty")
+              return q * dep_per if (dep_from > 0 and q >= dep_from and not b.get("lodging")) else 0
+          paid = lambda b: bool((b.get("kit") or {}).get("depositPaid"))
+
+          if not bks:
+              print(f"{date} 沒有預約，不寄信")
+              sys.exit(0)
+
+          mails = []
+
+          # ---------- 客人：明日預約提醒（每筆只寄一次）----------
+          repo = os.environ.get("GITHUB_REPOSITORY", "/")
+          owner_, name_ = repo.split("/", 1)
+          site = f"https://{owner_}.github.io/" + ("" if name_.lower() == f"{owner_}.github.io".lower() else name_ + "/")
+          EM = re.compile(r"[^\s@,;<>]{1,64}@[^\s@,;<>]{1,200}\.[^\s@,;<>]{1,20}")
+          cust_n = 0
+          if True:
+              for b in bks:
+                  em = str(b.get("email", ""))
+                  if (b.get("emailOpt") is not True or b.get("lodging") or b.get("remindedAt") or not EM.fullmatch(em)
+                          or not re.fullmatch(r"\d{2}:\d{2}", str(b.get("arrival", ""))) or not re.fullmatch(r"\d{9}", str(b.get("code", "")))):
+                      continue
+                  B = [f"您好，提醒您明天（{date}・週{wd}）有一筆預約：", "",
+                       f"場次：{sess.get(b.get('session'), '')}", f"預計抵達：{b['arrival']}",
+                       f"人數：大人 {n(b,'adults')}・孩童 {n(b,'children')}" + (f"・毛小孩 {n(b,'pets')} 隻" if n(b, "pets") else "") + f"・車 {n(b,'cars')} 輛" + (f"・野餐套組 {n(b,'addonQty')} 組" if n(b, "addonQty") else ""),
+                       f"預估金額：NT$ {n(b,'total'):,}（費用皆為現場收取）", f"預約代號：{b['code']}", ""]
+                  due = dep_due(b)
+                  if due and not paid(b):
+                      B += [f"💰 您的野餐套組需先支付訂金 NT$ {due:,}，目前尚未收到。", f"　匯款資料：{A.get('bankText', '')}　帳號 {A.get('account', '')}　戶名 {A.get('holder', '')}"]
+                      if str(A.get("lineUrl", "")).startswith("https://"):
+                          B.append(f"　匯款後請加入官方 LINE 回報（預約人電話、匯款帳號末 5 碼）：{A['lineUrl']}")
+                      B.append("")
+                  if d.get("petDay"):
+                      B += [f"🐾 {d.get('petDayNote', '')}"]
+                      if n(b, "pets"): B.append(f"　{d.get('petDayRule', '')}")
+                      B.append("")
+                  B += [f"若行程有變，請至預約網站「預約查詢」，輸入手機號碼與預約代號修改或取消：{site}",
+                        f"預約當天將無法線上修改，屆時如需變更請來電 {shop_phone}。", "", "（此信為系統自動發送，請勿直接回覆）"]
+                  c = EmailMessage(); c["Subject"] = f"【明日預約提醒】{date} 綠丘野餐"
+                  c["From"], c["To"] = user, em; c.set_content("\n".join(B)); mails.append((b["id"], c)); cust_n += 1
+
+          sent_ids = []
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+              s.login(user, pw)
+              for bid, msg in mails:
+                  try:
+                      s.send_message(msg)
+                      if bid: sent_ids.append(bid)
+                  except Exception as ex:
+                      print("::warning::一封信寄送失敗：", type(ex).__name__)
+          if sent_ids:
+              try: call("/api/internal/reminded", {"ids": sent_ids})
+              except Exception as ex: print("::warning::標記已提醒失敗（下次執行可能重複寄出）：", type(ex).__name__)
+          print(f"{date}：已寄出客人提醒 {len(sent_ids)} 封（符合條件 {cust_n} 筆）")
+          PY
