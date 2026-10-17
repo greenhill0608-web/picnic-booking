@@ -341,6 +341,7 @@
         <figcaption id="addonCap"></figcaption>
       </figure>
       <label for="addon" id="addonLabel" style="margin-top:10px"></label>
+      <div id="addonDesc" class="hint hidden" style="margin:2px 0 6px;color:var(--text,#333);font-weight:600"></div>
       <select id="addon"></select>
       <div class="hint" id="addonStock"></div>
       <div id="extraItems"></div>
@@ -655,6 +656,7 @@
         </div>
         <label for="ctLineUrl">官方 LINE 連結</label><input id="ctLineUrl" type="text" placeholder="https://lin.ee/…">
         <label for="ctAddImage">照片網址（留空＝使用內建照片）</label><input id="ctAddImage" type="text" placeholder="https://…">
+        <label for="ctAddDesc">套組內容說明（顯示在預約頁加購欄位上方）</label><input id="ctAddDesc" type="text" placeholder="例如：含借用野餐桌＆野餐墊">
         <label for="ctAddNote">照片下方說明</label><input id="ctAddNote" type="text">
 
         <h3 class="sub">單筆上限</h3>
@@ -931,6 +933,7 @@ const CONFIG = {
     bankText: "土地銀行（代碼 005）通霄分行", account: "084-005-164-787", holder: "張秀雅",
     lineUrl: "https://lin.ee/P4WnwmDH",
     adultDiscount: 50, discountPerSet: 2,     // 加購套組時：每位大人折抵 50 元，每個套組最多折抵 2 位大人
+    desc: "套組內容：含借用野餐桌＆野餐墊（當日現場領取，離園時歸還）",   // 預約頁加購欄位上方的說明；留空 = 不顯示
     image: "",                                // 留空 = 使用內嵌在本檔的照片；也可填圖片網址／檔名改用外部圖片
     imageNote: "圖片僅供參考，實際內容以現場供應為準"
   },
@@ -1535,6 +1538,7 @@ function renderStatic(){
   fillSelect($("pets"), 0, CONFIG.maxPets, 0, n => n === 0 ? "不帶毛小孩" : `${n} 隻`);
   fillSelect($("cars"), 0, CONFIG.maxCars, 1, n => n === 0 ? "0 輛（不開車）" : `${n} 輛`);
   $("addonLabel").textContent = `加購 ${CONFIG.addon.name}（${money(CONFIG.addon.price)}／${CONFIG.addon.unit}）`;
+  { const d = $("addonDesc"), t = (CONFIG.addon.desc || "").trim(); d.textContent = t; d.classList.toggle("hidden", !t); }
   initAddonPhoto();
   renderItemSelects();
   [["pets","p"],["cars","k"],["addon","q"]].forEach(([id,k]) => {
@@ -2943,7 +2947,7 @@ function renderContent(){
   const A = CONFIG.addon, v = (id, x) => { $(id).value = x; };
   v("ctAdultPrice", CONFIG.adultPrice); v("ctAdultCredit", CONFIG.adultCredit); v("ctChildPrice", CONFIG.childPrice);
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
-  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
+  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
    v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote);
@@ -2977,7 +2981,7 @@ function saveContent(){
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
     petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
-    addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"),
+    addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
     sessions:{}
   };
