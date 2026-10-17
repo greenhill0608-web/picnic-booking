@@ -54,7 +54,8 @@ jobs:
 
           rq = urllib.request.Request(api + "/api/internal/notify?id=" + bid, headers={"X-Notify-Secret": secret, "User-Agent": "picnic-notify"})
           try:
-              b = json.load(urllib.request.urlopen(rq, timeout=20))["booking"]
+              resp = json.load(urllib.request.urlopen(rq, timeout=20))
+              b, xtra = resp["booking"], (resp.get("extra") or {})
           except Exception as ex:
               print("::error::向後端取得預約資料失敗：", type(ex).__name__); sys.exit(1)
 
@@ -67,10 +68,14 @@ jobs:
           head = "預約取消" if cancelled else ("預約變更" if action == "edited" else "新預約")
           lines = [f"【{head}】{b.get('date', '')} {ses} {b.get('code', '')}", ""]
           people = f"大人 {b.get('adults', 0)}・孩童 {b.get('children', 0)}"
+          bx = b.get("extras") if isinstance(b.get("extras"), dict) else {}
+          xi = [(str(it.get("name", "")), str(it.get("unit", "")), int(bx.get(it.get("id")) or 0)) for it in (xtra.get("items") or []) if isinstance(it, dict)]
+          xi = [t for t in xi if t[2] > 0]
           extra = []
           if b.get("pets"): extra.append(f"毛小孩 {b['pets']} 隻")
           if b.get("cars") is not None: extra.append(f"車 {b['cars']} 輛")
           if b.get("addonQty"): extra.append(f"加購 {b['addonQty']}")
+          extra += [f"{nm} {q} {un}" for nm, un, q in xi]
           lines += [
               f"姓名：{b.get('name', '')}", f"手機：{b.get('phone', '')}", f"Email：{b.get('email', '')}",
               f"日期：{b.get('date', '')}　預計抵達：{b.get('arrival', '')}",
@@ -100,16 +105,18 @@ jobs:
               site = f"https://{owner_}.github.io/" + ("" if name_.lower() == f"{owner_}.github.io".lower() else name_ + "/")
               n = lambda k: int(b.get(k, 0) or 0)
               detail = [f"日期：{b['date']}　{ses}", f"預計抵達：{b['arrival']}",
-                        f"人數：大人 {n('adults')}・孩童 {n('children')}" + (f"・毛小孩 {n('pets')} 隻" if n('pets') else "") + f"・車 {n('cars')} 輛" + (f"・加購 {n('addonQty')}" if n('addonQty') else ""),
+                        f"人數：大人 {n('adults')}・孩童 {n('children')}" + (f"・毛小孩 {n('pets')} 隻" if n('pets') else "") + f"・車 {n('cars')} 輛" + (f"・加購 {n('addonQty')}" if n('addonQty') else "") + "".join(f"・{nm} {q} {un}" for nm, un, q in xi),
                         f"預估金額：NT$ {n('total'):,}（費用皆為現場收取）", f"預約代號：{b['code']}"]
               if cancelled:
                   body = ["您好，您的預約已取消：", ""] + detail[:1] + [detail[-1], "", "如有疑問，歡迎與我們聯絡。"]
                   subj = f"【預約取消】{b['date']}"
               elif action == "edited":
-                  body = ["您好，您的預約已更新，最新內容如下：", ""] + detail + ["", f"如需再次修改或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
+                  pd = ["", "🐾 " + str(xtra.get("petDayNote", ""))] if xtra.get("petDay") else []
+                  body = ["您好，您的預約已更新，最新內容如下：", ""] + detail + pd + ["", f"如需再次修改或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
                   subj = f"【預約變更通知】{b['date']}"
               else:
-                  body = ["您好，您的預約已成立：", ""] + detail + ["", "📸 請截圖留存預約完成畫面作為憑證，入園時請出示。",
+                  pd = ["", "🐾 " + str(xtra.get("petDayNote", ""))] if xtra.get("petDay") else []
+                  body = ["您好，您的預約已成立：", ""] + detail + pd + ["", "📸 請截圖留存預約完成畫面作為憑證，入園時請出示。",
                           f"如需查詢或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
                   subj = f"【預約成功通知】{b['date']}"
               cust = EmailMessage(); cust["Subject"], cust["From"], cust["To"] = subj, user, em
