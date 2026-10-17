@@ -223,6 +223,10 @@
   .scell small{margin-top:4px}
 
   /* 後台統計 */
+  body .card.announce,body.has-art .card.announce{border-left:6px solid #e0a100;background:#fff6dc}
+  .announce h2{margin:0 0 6px;font-size:17px}
+  .announce ul{margin:0;padding-left:20px}
+  .announce li{margin:2px 0}
   #printArea{display:none}
   @media print{
     body > *:not(#printArea){display:none !important}
@@ -272,6 +276,7 @@
 
   <!-- 預約 -->
   <section id="tab-book">
+    <div class="card announce hidden" id="announceBox"></div>
     <div class="card" id="bookForm">
       <div class="info-box" id="infoBox"></div>
 
@@ -429,6 +434,18 @@
         <div class="hint" style="margin:4px 0 0">PDF 內容：預約時段、預計入園時間、姓名、人數、毛小孩、車數、電話、套組數量（依上方選擇的日期）。</div>
         <div id="stChips" style="margin-top:6px"></div>
         <div id="stBox"></div>
+      </div>
+
+      <div class="card" id="annCard">
+        <h2>活動公告（顯示在預約頁最上方）</h2>
+        <label class="inline"><input type="checkbox" id="anOn"><span>顯示公告</span></label>
+        <label for="anTitle">公告標題</label><input id="anTitle" type="text" maxlength="30">
+        <label class="inline"><input type="checkbox" id="anAuto"><span>自動列出近期毛小孩日（依「毛小孩野餐日」的設定，日期過了會自動消失）</span></label>
+        <label for="anLines">公告內容（一行一條，可留空）</label>
+        <textarea id="anLines" rows="4" placeholder="例：10/31 萬聖節園遊會，歡迎裝扮入園"></textarea>
+        <div class="hint">沒有任何內容時，預約頁不會顯示公告。</div>
+        <button class="btn" id="anSave">儲存公告</button>
+        <div id="anMsg"></div>
       </div>
 
       <div class="card" id="invCard">
@@ -923,6 +940,7 @@ const CONFIG = {
   petDayRule: "本日為毛小孩野餐日：毛小孩不強制繫繩，可在園區自由活動，請主人隨時留意並清理排泄物",
   petDayNote: "本日為毛小孩野餐日，園區內會有較多毛小孩自由活動；若您或同行者害怕動物、對毛髮過敏，請斟酌是否預約。",
 
+  announce: { on:true, title:"活動公告", auto:true, lines:[] },   // 預約頁最上方的公告；後台「活動公告」可編輯
   infoLines: [],                            // 其他說明（營業場次、預約期間、入園費會自動產生）；後台「網站內容」可編輯
   footer: "",                               // 頁尾文字；留空 = 不顯示
   notices: [                                // {max} 會自動換成單筆人數上限
@@ -941,9 +959,9 @@ const SESSIONS = CONFIG.sessions;
 const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
   childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
-  petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
+  announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
   addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","infoLines","infoFull","notices","footer"];
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","infoLines","infoFull","notices","footer","announce"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   const D = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
@@ -1608,6 +1626,7 @@ function refreshBook(){
   renderArrival();
   renderPet();
   renderItemSelects();
+  renderAnnounce();
   renderPrice();
 }
 
@@ -2873,6 +2892,7 @@ async function importFromFile(){
 }
 function bindPurge(){
   bindInventory();
+  $("anSave").addEventListener("click", saveAnnounce);
   $("imFileBtn").addEventListener("click", importFromFile);
   $("imBtn").addEventListener("click", importFromGithub);
   if(Store.api){ $("importCard").classList.remove("hidden"); try{ const m = /^([\w.-]+)\.github\.io\/([^/]+)/.exec(location.host + location.pathname); if(m) $("imRepo").value = m[1] + "/" + m[2]; }catch(e){} }
@@ -2956,7 +2976,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
     sessions:{}
@@ -3003,7 +3023,7 @@ function renderAdmin(){
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
@@ -3075,6 +3095,29 @@ function exportStatsPdf(){
   const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
   window.addEventListener("afterprint", restore);
   window.print();
+}
+
+/* ========= 預約頁頂端：活動公告 ========= */
+function renderAnnounce(){
+  const box = $("announceBox"); if(!box) return;
+  const a = Object.assign({ on:true, title:"活動公告", auto:true, lines:[] }, CONFIG.announce || {});
+  const items = (Array.isArray(a.lines) ? a.lines : []).map(x => String(x).trim()).filter(Boolean).map(x => esc(x));
+  if(a.auto){
+    const t = todayStr(), days = Store.petDays().filter(d => d >= t && !isNoPetDay(d)).sort().slice(0, 6);
+    if(days.length) items.unshift(`🐾 近期毛小孩野餐日：${days.map(d => esc(`${+d.slice(5, 7)}/${+d.slice(8)}（${WEEK[wdOf(d)]}）`)).join("、")}`);
+  }
+  box.classList.toggle("hidden", !a.on || !items.length);
+  box.innerHTML = a.on && items.length ? `<h2>📢 ${esc(a.title || "活動公告")}</h2><ul>${items.map(x => `<li>${x}</li>`).join("")}</ul>` : "";
+}
+function renderAnnounceForm(){
+  const a = Object.assign({ on:true, title:"活動公告", auto:true, lines:[] }, CONFIG.announce || {});
+  $("anOn").checked = !!a.on; $("anAuto").checked = !!a.auto; $("anTitle").value = a.title || ""; $("anLines").value = (a.lines || []).join("\n");
+}
+function saveAnnounce(){
+  const a = { on:$("anOn").checked, auto:$("anAuto").checked, title:$("anTitle").value.trim() || "活動公告", lines:$("anLines").value.split("\n").map(x => x.trim()).filter(Boolean).slice(0, 20).map(x => x.slice(0, 200)) };
+  const S = Store.settings(); S.content = Object.assign({}, S.content || {}, { announce:a }); Store.saveSettings(S);
+  applyContent(); renderAnnounce(); renderContent();
+  msg($("anMsg"), Store.remote ? "已儲存，正在寫入" + BACKEND + "…（完成後會顯示提示）" : "已儲存", "ok");
 }
 
 // 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消）；匯出 CSV 也用同一份
