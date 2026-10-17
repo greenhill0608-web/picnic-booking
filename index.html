@@ -535,6 +535,11 @@
         <label class="inline" style="margin-top:8px"><input type="checkbox" id="imSettings" checked><span>同時匯入營業設定（會覆蓋目前的設定）</span></label>
         <button class="btn ghost" id="imBtn" style="margin-top:8px">開始匯入</button>
         <div id="imMsg"></div>
+        <hr style="border:0;border-top:1px solid var(--line,#ddd);margin:14px 0">
+        <label for="imFile" style="margin-top:0">或：匯入檔案（.json，由其他預約系統的 Excel 轉換而來）</label>
+        <input type="file" id="imFile" accept=".json,application/json">
+        <button class="btn ghost" id="imFileBtn" style="margin-top:8px">匯入這個檔案</button>
+        <div id="imFileMsg"></div>
       </div>
 
       <div class="card" id="purgeCard">
@@ -2561,7 +2566,26 @@ async function importFromGithub(){
   }catch(e){ msg(out, "匯入失敗：" + e.message, "err"); }
   btn.disabled = false;
 }
+async function importFromFile(){
+  const out = $("imFileMsg"), btn = $("imFileBtn"), f = $("imFile").files[0];
+  if(!f) return msg(out, "請先選擇檔案", "err");
+  btn.disabled = true;
+  try{
+    const data = JSON.parse(await f.text()), list = Array.isArray(data) ? data : data.bookings;
+    if(!Array.isArray(list) || !list.length) throw new Error("檔案裡沒有預約資料");
+    let n = 0;
+    for(let i = 0; i < list.length; i += 100){
+      msg(out, `寫入中…（${Math.min(i + 100, list.length)} / ${list.length}）`, "ok");
+      const r = await API.call("POST", "/api/admin/import", { bookings: list.slice(i, i + 100) }, true);
+      n += r.imported;
+    }
+    await Store.load(); applyContent(); renderStatic(); refreshBook(); renderAdmin();
+    msg(out, `✔ 已匯入 ${n} 筆預約（共 ${list.length} 筆，重複匯入同一檔案不會產生重複資料）。`, "ok");
+  }catch(e){ msg(out, "匯入失敗：" + e.message, "err"); }
+  btn.disabled = false;
+}
 function bindPurge(){
+  $("imFileBtn").addEventListener("click", importFromFile);
   $("imBtn").addEventListener("click", importFromGithub);
   if(Store.api){ $("importCard").classList.remove("hidden"); try{ const m = /^([\w.-]+)\.github\.io\/([^/]+)/.exec(location.host + location.pathname); if(m) $("imRepo").value = m[1] + "/" + m[2]; }catch(e){} }
   const yday = new Date(); yday.setDate(yday.getDate() - 1);
