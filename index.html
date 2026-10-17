@@ -415,7 +415,9 @@
             <option value="dateDesc">排序：入園日期（遠→近）</option>
           </select>
           <button class="btn ghost small" id="fClear">顯示全部</button>
-          <button class="btn small" id="csvBtn" title="有選日期就只匯出該日；沒選日期則匯出全部">匯出 CSV</button>
+          <label class="inline" style="margin:0"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客</span></label>
+          <label class="inline" style="margin:0"><input type="checkbox" id="fHideCancel"><span>隱藏已取消</span></label>
+          <button class="btn small" id="csvBtn" title="匯出目前清單顯示的內容（依日期與隱藏條件）">匯出 CSV</button>
         </div>
         <div class="cap-banner hidden" id="capBanner"></div>
         <div class="hint" id="fStat"></div>
@@ -1800,10 +1802,14 @@ function bind(){
   });
   $("logoutBtn").addEventListener("click", () => { forgetAdmin(); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
+  [["fHideLodge","picnic_hide_lodge"],["fHideCancel","picnic_hide_cancel"]].forEach(([id,k]) => {
+    try{ $(id).checked = localStorage.getItem(k) === "1"; }catch(e){}
+    $(id).addEventListener("change", () => { try{ localStorage.setItem(k, $(id).checked ? "1" : "0"); }catch(e){} renderAdminList(); });
+  });
   $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
   $("csvBtn").addEventListener("click", () => {
-    const f = $("fDate").value;      // 有選日期就只匯出該日，沒選才匯出全部
-    const list = Store.all().filter(b => !f || b.date === f);
+    const f = $("fDate").value;      // 匯出目前清單顯示的內容（含日期與隱藏條件）
+    const list = adminFiltered();
     if(!list.length) return toast("沒有可匯出的預約", "err");
     exportCSV(list, f ? `bookings-${f}.csv` : undefined);
   });
@@ -2764,10 +2770,14 @@ function renderStats(){
   $("stBox").innerHTML = html;
 }
 
+// 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消）；匯出 CSV 也用同一份
+function adminFiltered(){
+  const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked;
+  return Store.all().filter(b => (!f || b.date === f) && !(hl && b.lodging) && !(hc && b.status !== "confirmed"));
+}
 function renderAdminList(){
   const f = $("fDate").value;
-  let list = Store.all();
-  if(f) list = list.filter(b => b.date === f);
+  let list = adminFiltered();
   const mode = $("fSort").value || "new";
   const created = b => String(b.createdAt || "");
   const byDate = (a, b) => a.date.localeCompare(b.date) || String(a.arrival || "").localeCompare(String(b.arrival || ""));
