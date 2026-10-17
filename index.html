@@ -145,7 +145,26 @@
   details.card.fold:not([open]) > summary::after{transform:rotate(-90deg)}
   details.card.fold > summary h2{margin:0}
   details.card.fold[open] > summary{margin-bottom:12px}
-  .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px}
+  .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
+  /* 整理版面：自訂順序與顏色（只存在這支瀏覽器）*/
+  .lay-ctl{display:none}
+  #adminPanel.lay-edit details.card.fold > summary{flex-wrap:wrap;cursor:default}
+  #adminPanel.lay-edit details.card.fold > summary::after{display:none}
+  #adminPanel.lay-edit .lay-ctl{display:flex;flex-basis:100%;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .lay-ctl button.mv{border:1px solid var(--line);background:#fff;border-radius:8px;min-width:40px;height:34px;font-size:15px;cursor:pointer}
+  .lay-ctl .dot{width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #aab5ad;cursor:pointer;padding:0}
+  .lay-ctl .dot.on{box-shadow:0 0 0 2px var(--green-d)}
+  .lay-ctl .sp{flex:1}
+  #layBar{display:none;background:#eef6ff;border:1px solid #b9d6f2;border-radius:10px;padding:10px;margin-bottom:10px;font-size:14px}
+  #adminPanel.lay-edit #layBar{display:block}
+  #layBar .row{margin-top:6px}
+  #adminPanel details.card.fold[data-c="y"]{background:#fff3b0;border-color:#e8cf55}
+  #adminPanel details.card.fold[data-c="g"]{background:#e1f3da;border-color:#9fcf9a}
+  #adminPanel details.card.fold[data-c="b"]{background:#dcebfb;border-color:#9cc3ec}
+  #adminPanel details.card.fold[data-c="p"]{background:#fde2eb;border-color:#eeaec3}
+  #adminPanel details.card.fold[data-c="v"]{background:#ebe3fa;border-color:#c0abe6}
+  #adminPanel details.card.fold[data-c="o"]{background:#ffe4cc;border-color:#f0b27a}
+  #adminPanel details.card.fold[data-c="k"]{background:#e8ebe9;border-color:#c4cac6}
   .dy-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;min-width:420px}
   .dy-table th,.dy-table td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
   .dy-table th:first-child,.dy-table td:first-child{text-align:left}
@@ -427,7 +446,12 @@
     </div>
 
     <div id="adminPanel" class="hidden">
-      <div class="fold-bar"><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+
+      <div id="layBar">
+        <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
+        <div class="row"><button class="btn small" id="layDone">完成</button><button class="btn ghost small" id="layReset">還原預設版面與顏色</button></div>
+      </div>
 
       <div class="card" id="statCard">
         <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
@@ -2486,6 +2510,79 @@ function makeFoldable(){
   const all = open => $("adminPanel").querySelectorAll("details.fold").forEach(d => d.open = open);
   $("foldAll").addEventListener("click", () => all(true));
   $("foldNone").addEventListener("click", () => all(false));
+  makeLayout(saved);
+}
+
+/* ========= 後台：自訂卡片順序與顏色（存在這支瀏覽器的 localStorage）========= */
+function makeLayout(foldSaved){
+  const LK = "picnic_layout", panel = $("adminPanel");
+  const COLORS = [["", "預設", "#ffffff"], ["y", "黃", "#ffe97a"], ["g", "綠", "#a9dba0"], ["b", "藍", "#8fbbea"], ["p", "粉", "#f4a9c3"], ["v", "紫", "#b9a2ea"], ["o", "橘", "#f5b077"], ["k", "灰", "#c4cac6"]];
+  let L = { order:[], color:{} };
+  try{ const j = JSON.parse(localStorage.getItem(LK) || "{}"); if(Array.isArray(j.order)) L.order = j.order; if(j.color && typeof j.color === "object") L.color = j.color; }catch(e){}
+  const save = () => { try{ localStorage.setItem(LK, JSON.stringify(L)); }catch(e){} };
+  const cards = () => [...panel.querySelectorAll(":scope > details.fold")];
+  const keyOf = d => d.dataset.key;
+  cards().forEach(d => { d.dataset.key = d.querySelector("summary h2").textContent.trim(); });
+  const DEF = cards().map(keyOf);          // 程式原本的排列順序（還原預設、安插新卡片都以它為準）
+
+  // 套用順序：存過的照存的排；沒存過的（之後新增的卡片）放在它預設位置的前一張後面
+  function applyOrder(){
+    const cs = cards(), byKey = {}; cs.forEach(d => byKey[keyOf(d)] = d);
+    const def = DEF;
+    const res = L.order.filter(k => byKey[k]);
+    def.forEach((k, i) => {
+      if(res.includes(k)) return;
+      let at = 0; for(let j = i - 1; j >= 0; j--){ const x = res.indexOf(def[j]); if(x >= 0){ at = x + 1; break; } }
+      res.splice(at, 0, k);
+    });
+    res.forEach(k => panel.appendChild(byKey[k]));
+  }
+  function applyColors(){ cards().forEach(d => { const c = L.color[keyOf(d)]; if(c) d.dataset.c = c; else delete d.dataset.c; }); }
+  function markDots(){ cards().forEach(d => d.querySelectorAll(".dot").forEach(x => x.classList.toggle("on", (x.dataset.c || "") === (L.color[keyOf(d)] || "")))); }
+
+  // 每張卡片的控制列（只在整理模式顯示）
+  cards().forEach(d => {
+    const ctl = document.createElement("div"); ctl.className = "lay-ctl";
+    ctl.innerHTML = `<button type="button" class="mv" data-mv="top" title="移到最上面">⤒</button><button type="button" class="mv" data-mv="up" title="往上">▲</button><button type="button" class="mv" data-mv="down" title="往下">▼</button><span class="sp"></span>`
+      + COLORS.map(c => `<button type="button" class="dot" data-c="${c[0]}" title="${c[1]}" style="background:${c[2]}"></button>`).join("");
+    d.querySelector("summary").appendChild(ctl);
+  });
+  panel.addEventListener("click", e => {
+    const t = e.target.closest(".lay-ctl button"); if(!t) return;
+    e.preventDefault(); e.stopPropagation();
+    const d = t.closest("details.fold"), k = keyOf(d);
+    if(t.dataset.mv){
+      const cs = cards(), i = cs.indexOf(d);
+      if(t.dataset.mv === "top"){ if(i > 0) cs[0].before(d); }
+      else if(t.dataset.mv === "up"){ if(i > 0) cs[i - 1].before(d); }
+      else if(i < cs.length - 1) cs[i + 1].after(d);
+      L.order = cards().map(keyOf); save();
+      d.scrollIntoView({ block:"center", behavior:"smooth" });
+    }else{
+      if(t.dataset.c) L.color[k] = t.dataset.c; else delete L.color[k];
+      save(); applyColors(); markDots();
+    }
+  }, true);
+
+  let prevOpen = null;
+  function setEdit(on){
+    panel.classList.toggle("lay-edit", on);
+    $("layEdit").textContent = on ? "✔ 完成整理" : "🎨 整理版面";
+    if(on){
+      prevOpen = cards().map(d => [d, d.open]); cards().forEach(d => d.open = false);   // 全部收合，排序比較方便
+      markDots(); panel.scrollIntoView({ block:"start" });
+    }else if(prevOpen){
+      prevOpen.forEach(([d, o]) => d.open = o); prevOpen = null;
+      cards().forEach(d => { foldSaved[keyOf(d)] = d.open; }); try{ localStorage.setItem("picnic_fold", JSON.stringify(foldSaved)); }catch(e){}
+    }
+  }
+  $("layEdit").addEventListener("click", () => setEdit(!panel.classList.contains("lay-edit")));
+  $("layDone").addEventListener("click", () => setEdit(false));
+  $("layReset").addEventListener("click", () => {
+    if(!confirm("要把卡片順序與顏色都還原成預設嗎？")) return;
+    L = { order:[], color:{} }; save(); applyOrder(); applyColors(); markDots(); toast("已還原預設版面", "ok");
+  });
+  applyOrder(); applyColors();
 }
 /* ========= 客人自行修改預約 ========= */
 let cuId = null;
