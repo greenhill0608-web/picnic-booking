@@ -399,10 +399,21 @@
     <div id="adminPanel" class="hidden">
       <div class="fold-bar"><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
+      <div class="card" id="setsCard">
+        <h2>明日野餐套組</h2>
+        <div id="setsBox"></div>
+      </div>
+
       <div class="card">
         <h2>預約清單</h2>
         <div class="row">
           <input type="date" id="fDate">
+          <select id="fSort" aria-label="排序方式" style="max-width:100%">
+            <option value="new">排序：最新預約在上</option>
+            <option value="old">排序：最早預約在上</option>
+            <option value="dateAsc">排序：入園日期（近→遠）</option>
+            <option value="dateDesc">排序：入園日期（遠→近）</option>
+          </select>
           <button class="btn ghost small" id="fClear">顯示全部</button>
           <button class="btn small" id="csvBtn">匯出 CSV</button>
         </div>
@@ -1490,31 +1501,25 @@ function refreshBook(){
   renderPrice();
 }
 
-// 入園資訊的預設內容（含 {場次}{期間}{天數} 三個會自動更新的代號）；後台可整段改寫
+// 入園資訊的預設內容。{場次}{期間}{天數} 與三個「行代號」會自動依最新設定換成文字
+function infoLineText(name){
+  if(name === "{大人票價行}") return `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : "");
+  if(name === "{孩童票價行}") return `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`;
+  if(name === "{毛小孩費用行}") return CONFIG.petFee > 0 ? `毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）` : "";
+  return name;
+}
+const INFO_LINE_TOKENS = ["{大人票價行}", "{孩童票價行}", "{毛小孩費用行}"];
 function autoInfoTemplate(){
-  return [
-    `開放場次：{場次}`,
-    `預約期間：目前開放 {期間}（未來 {天數} 天內）`,
-    `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : ""),
-    `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`
-  ].concat(CONFIG.petFee > 0 ? [`毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）`] : []).concat(CONFIG.infoLines);
+  return ["開放場次：{場次}", "預約期間：目前開放 {期間}（未來 {天數} 天內）"].concat(INFO_LINE_TOKENS, CONFIG.infoLines);
 }
 function renderInfo(S){
   S = S || Store.settings();
   const [mn, mx] = windowRange(S);
-  const fill = l => String(l).split("{場次}").join(hoursSummary(S)).split("{期間}").join(`${mn} ～ ${mx}`).split("{天數}").join(S.maxAdvanceDays);
-  if(Array.isArray(CONFIG.infoFull)){
-    $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + CONFIG.infoFull.map(l => `<li>${esc(fill(l))}</li>`).join("") + "</ul>";
-    refreshPeople();
-    $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.map(l => `<li>${esc(l.replace("{max}", S.maxPeoplePerBooking))}</li>`).join("") + "</ul>";
-    return;
-  }
-  const lines = [
-    `開放場次：${hoursSummary(S)}`,
-    `預約期間：目前開放 ${mn} ～ ${mx}（未來 ${S.maxAdvanceDays} 天內）`,
-    `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : ""),
-    `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`
-  ].concat(CONFIG.petFee > 0 ? [`毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）`] : []).concat(CONFIG.infoLines);
+  const fill = l => {
+    l = INFO_LINE_TOKENS.includes(l) ? infoLineText(l) : l;
+    return String(l).split("{場次}").join(hoursSummary(S)).split("{期間}").join(`${mn} ～ ${mx}`).split("{天數}").join(S.maxAdvanceDays);
+  };
+  const lines = (Array.isArray(CONFIG.infoFull) ? CONFIG.infoFull : autoInfoTemplate()).map(fill).filter(l => l.trim() !== "");
   $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + lines.map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
   refreshPeople();
   $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.map(l => `<li>${esc(l.replace("{max}", S.maxPeoplePerBooking))}</li>`).join("") + "</ul>";
@@ -1780,7 +1785,7 @@ function bind(){
   });
   bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit();
   $("ctSave").addEventListener("click", saveContent);
-  $("ctInfoReset").addEventListener("click", () => { const el = $("ctInfo"); el.value = autoInfoTemplate().join("\n"); el.dataset.orig = el.value; el.dataset.auto = "1"; toast("已還原為預設內容，按「儲存」後生效", "ok"); });
+  $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
   $("hideEntryBtn").addEventListener("click", () => {
     try{ localStorage.removeItem("picnic_admin_entry"); }catch(e){}
@@ -1840,6 +1845,8 @@ function bind(){
     });
   };
   $("adminList").addEventListener("click", cancelHandler(() => { renderAdminList(); renderStats(); }));
+  try{ const sv = localStorage.getItem("picnic_admin_sort"); if(sv && [...$("fSort").options].some(o => o.value === sv)) $("fSort").value = sv; }catch(e){}
+  $("fSort").addEventListener("change", () => { try{ localStorage.setItem("picnic_admin_sort", $("fSort").value); }catch(e){} renderAdminList(); });
   $("stDate").addEventListener("change", renderStats);
   $("stChips").addEventListener("click", e => {
     const b = e.target.closest("[data-st]"); if(!b) return;
@@ -2254,7 +2261,7 @@ function bindDaily(){
 }
 /* ========= 後台：各區塊可收折（記住每個區塊的狀態）========= */
 function makeFoldable(){
-  const KEY = "picnic_fold", OPEN_DEFAULT = ["預約清單"];
+  const KEY = "picnic_fold", OPEN_DEFAULT = [];
   let saved = {}; try{ saved = JSON.parse(localStorage.getItem(KEY) || "{}"); }catch(e){}
   const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(saved)); }catch(e){} };
   [...$("adminPanel").children].filter(c => c.classList.contains("card")).forEach(card => {
@@ -2605,7 +2612,7 @@ function renderContent(){
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
-  { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); el.value = (full ? CONFIG.infoFull : autoInfoTemplate()).join("\n"); el.dataset.orig = el.value; el.dataset.auto = full ? "0" : "1"; }
+  { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
    v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote);
   v("ctFooter", CONFIG.footer || ""); v("ctSiteName", CONFIG.siteName);
   $("ctSessions").innerHTML = SESSIONS.map(x => `
@@ -2618,6 +2625,16 @@ function renderContent(){
       </div>
     </div>`).join("");
 }
+// 編輯框顯示「看得懂的文字」；三個票價行存檔時，沒被改過的會換回代號，之後調整票價時文字會自動跟著更新
+function infoEditorFill(lines, auto){
+  const el = $("ctInfo"), map = {};
+  const shown = lines.map(l => { if(INFO_LINE_TOKENS.includes(l)){ const t = infoLineText(l); if(t){ map[t] = l; return t; } return null; } return l; }).filter(l => l !== null);
+  el.value = shown.join("\n"); el.dataset.orig = el.value; el.dataset.auto = auto ? "1" : "0"; el.dataset.map = JSON.stringify(map);
+}
+function infoEditorLines(){
+  const el = $("ctInfo"); let map = {}; try{ map = JSON.parse(el.dataset.map || "{}"); }catch(e){}
+  return el.value.split("\n").map(x => x.trim()).filter(Boolean).map(l => map[l] || l);
+}
 function saveContent(){
   const out = $("ctMsg"), n = id => $(id).value.trim() === "" ? NaN : Number($(id).value), t = id => $(id).value.trim();
   const lines = id => $(id).value.split("\n").map(x => x.trim()).filter(Boolean);
@@ -2626,7 +2643,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : lines("ctInfo"), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
     sessions:{}
@@ -2722,12 +2739,46 @@ function renderAdminList(){
   const f = $("fDate").value;
   let list = Store.all();
   if(f) list = list.filter(b => b.date === f);
-  list.sort((a,b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
+  const mode = $("fSort").value || "new";
+  const created = b => String(b.createdAt || "");
+  const byDate = (a, b) => a.date.localeCompare(b.date) || String(a.arrival || "").localeCompare(String(b.arrival || ""));
+  list.sort(mode === "new" ? (a, b) => created(b).localeCompare(created(a)) || (b.issue || 0) - (a.issue || 0)
+    : mode === "old" ? (a, b) => created(a).localeCompare(created(b)) || (a.issue || 0) - (b.issue || 0)
+    : mode === "dateDesc" ? (a, b) => -byDate(a, b)
+    : byDate);
   const ok = list.filter(b => b.status === "confirmed");
   $("fStat").textContent = `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
     + (f ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
   $("adminList").innerHTML = list.length ? list.map(b => bookingCard(b, true)).join("") : `<div class="hint">沒有預約資料</div>`;
   renderDeposits();
+  renderTomorrowSets();
+}
+
+// 明日（與今日）野餐套組數量：含住宿客，不含已取消
+function renderTomorrowSets(){
+  const t = new Date(); t.setDate(t.getDate() + 1);
+  const tom = fmt(t), tod = todayStr();
+  const sets = date => {
+    const r = { total:0, lodging:0, unpaid:0, unpaidSets:0, bySession:{} };
+    SESSIONS.forEach(x => { r.bySession[x.id] = 0; });
+    Store.all().filter(b => b.date === date && b.status === "confirmed" && !b.walkin).forEach(b => {
+      const q = Number(b.addonQty) || 0; if(!q) return;
+      r.total += q; if(b.lodging) r.lodging += q;
+      const sid = sessionOf(b); r.bySession[sid] = (r.bySession[sid] || 0) + q;
+      if(!b.lodging && depositDue(q) && !kitOf(b).depositPaid){ r.unpaid++; r.unpaidSets += q; }
+    });
+    return r;
+  };
+  const a = sets(tom), n = sets(tod), unit = CONFIG.addon.unit || "組";
+  const hd = document.querySelector("#setsCard h2"); if(hd) hd.textContent = `明日野餐套組：${a.total} ${unit}`;   // 收合時標題就看得到數量
+  const per = r => SESSIONS.map(x => `${esc(x.short || x.label)} ${r.bySession[x.id] || 0}`).join("　");
+  $("setsBox").innerHTML = `<div class="stat-total" style="text-align:center">
+      <div style="font-size:14px">${esc(showDate(tom))}</div>
+      <div style="font-size:42px;font-weight:800;line-height:1.2">${a.total} <span style="font-size:18px">${esc(unit)}</span></div>
+      <div>${per(a)}${a.lodging ? `　（含住宿客 ${a.lodging}）` : ""}</div>
+      ${a.unpaid ? `<div style="color:#b3261e;margin-top:4px">⚠ ${a.unpaid} 筆訂單（${a.unpaidSets} ${esc(unit)}）訂金尚未確認</div>` : ""}
+    </div>
+    <div class="hint" style="margin-top:8px">今日（${esc(showDate(tod))}）：${n.total} ${esc(unit)}　${per(n)}${n.lodging ? `（含住宿客 ${n.lodging}）` : ""}</div>`;
 }
 
 // 「某場次 勾選＋人數上限」的小格子（每週設定與指定日期共用）
