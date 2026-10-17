@@ -415,7 +415,7 @@
             <option value="dateDesc">排序：入園日期（遠→近）</option>
           </select>
           <button class="btn ghost small" id="fClear">顯示全部</button>
-          <button class="btn small" id="csvBtn">匯出 CSV</button>
+          <button class="btn small" id="csvBtn" title="有選日期就只匯出該日；沒選日期則匯出全部">匯出 CSV</button>
         </div>
         <div class="cap-banner hidden" id="capBanner"></div>
         <div class="hint" id="fStat"></div>
@@ -1801,7 +1801,12 @@ function bind(){
   $("logoutBtn").addEventListener("click", () => { forgetAdmin(); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
   $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
-  $("csvBtn").addEventListener("click", () => exportCSV());
+  $("csvBtn").addEventListener("click", () => {
+    const f = $("fDate").value;      // 有選日期就只匯出該日，沒選才匯出全部
+    const list = Store.all().filter(b => !f || b.date === f);
+    if(!list.length) return toast("沒有可匯出的預約", "err");
+    exportCSV(list, f ? `bookings-${f}.csv` : undefined);
+  });
 
   // 勾選場次時，讓人數上限欄位變淡／恢復
   document.addEventListener("change", e => {
