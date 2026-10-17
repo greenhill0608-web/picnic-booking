@@ -23,17 +23,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 部署時才把 repo 資訊與「預約用權杖」填進網頁（權杖不會出現在 repo 的程式碼裡）
-      - name: Inject repo info and booking token
+      # 部署時把「後端網址」填進網頁。
+      #   有設定 Variables → API_URL：使用 Cloudflare 後端（推薦；網頁裡不放任何權杖）。
+      #   沒設定：沿用舊的 GitHub Issues 模式（需要 BOOKING_TOKEN；預約資料會公開在 repo，不建議）。
+      - name: Inject backend URL
         env:
+          API_URL: ${{ vars.API_URL }}
           BOOKING_TOKEN: ${{ secrets.BOOKING_TOKEN }}
         run: |
           mkdir _site
           cp index.html _site/index.html
-          OWNER="${GITHUB_REPOSITORY%%/*}"
-          REPO="${GITHUB_REPOSITORY#*/}"
-          sed -i "s|owner: \"\"|owner: \"${OWNER}\"|; s|repo: \"\"|repo: \"${REPO}\"|; s|__GH_TOKEN__|${BOOKING_TOKEN}|" _site/index.html
-          test -n "$BOOKING_TOKEN" || echo "::warning::尚未設定 BOOKING_TOKEN，客人將無法送出預約"
+          if [ -n "$API_URL" ]; then
+            sed -i "s|__API_URL__|${API_URL%/}|" _site/index.html
+          else
+            OWNER="${GITHUB_REPOSITORY%%/*}"
+            REPO="${GITHUB_REPOSITORY#*/}"
+            sed -i "s|owner: \"\"|owner: \"${OWNER}\"|; s|repo: \"\"|repo: \"${REPO}\"|; s|__GH_TOKEN__|${BOOKING_TOKEN}|" _site/index.html
+            test -n "$BOOKING_TOKEN" || echo "::warning::尚未設定 API_URL 或 BOOKING_TOKEN，客人將無法送出預約"
+          fi
+          rm -rf _site/worker
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
