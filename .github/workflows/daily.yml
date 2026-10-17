@@ -78,6 +78,9 @@ jobs:
               sys.exit(0)
 
           mails = []
+          def xtxt(b):
+              bx = b.get("extras") if isinstance(b.get("extras"), dict) else {}
+              return "".join(f"・{it.get('name', '')} {int(bx.get(it.get('id')) or 0)} {it.get('unit', '')}" for it in (d.get("items") or []) if isinstance(it, dict) and int(bx.get(it.get("id")) or 0) > 0)
 
           # ---------- 客人：明日預約提醒（每筆只寄一次）----------
           repo = os.environ.get("GITHUB_REPOSITORY", "/")
@@ -93,7 +96,7 @@ jobs:
                       continue
                   B = [f"您好，提醒您明天（{date}・週{wd}）有一筆預約：", "",
                        f"場次：{sess.get(b.get('session'), '')}", f"預計抵達：{b['arrival']}",
-                       f"人數：大人 {n(b,'adults')}・孩童 {n(b,'children')}" + (f"・毛小孩 {n(b,'pets')} 隻" if n(b, "pets") else "") + f"・車 {n(b,'cars')} 輛" + (f"・野餐套組 {n(b,'addonQty')} 組" if n(b, "addonQty") else ""),
+                       f"人數：大人 {n(b,'adults')}・孩童 {n(b,'children')}" + (f"・毛小孩 {n(b,'pets')} 隻" if n(b, "pets") else "") + f"・車 {n(b,'cars')} 輛" + (f"・野餐套組 {n(b,'addonQty')} 組" if n(b, "addonQty") else "") + xtxt(b),
                        f"預估金額：NT$ {n(b,'total'):,}（費用皆為現場收取）", f"預約代號：{b['code']}", ""]
                   due = dep_due(b)
                   if due and not paid(b):
