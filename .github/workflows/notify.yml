@@ -1,142 +1,124 @@
 name: Email notification for bookings
 
-# 有人預約（新增 Issue）、取消（關閉 Issue）或客人自行修改預約（編輯 Issue）時，自動寄 email 通知。
-# 後台人員編輯（報到、取餐、押金、備註…）不會寄信；只有「客人自己修改」才會。
-# 需要在 Settings → Secrets and variables → Actions 設定：
-#   NOTIFY_TO  收通知的 email（多個用逗號分隔，例如 service@company.com,boss@company.com）
-#   SMTP_USER  寄件的 Gmail 帳號
-#   SMTP_PASS  該 Gmail 的「應用程式密碼」（16 碼，不是登入密碼）
+# 後端（Cloudflare Worker）在「新預約／取消／客人修改」時呼叫這個流程，只告訴它「哪一筆、什麼事件」（不含任何個資）；
+# 這裡再回頭向後端取資料、用 Gmail 寄信。後台人員編輯（報到、取餐、押金、備註…）、現場客、住宿客都不會寄信。
+# 需要的設定（Settings → Secrets and variables → Actions）：
+#   Variables：API_URL      後端 Worker 網址（例 https://picnic-booking-api.xxx.workers.dev）
+#   Secrets：  NOTIFY_SECRET 與 Worker 相同的通關密語；NOTIFY_TO 收通知的 email（多個用逗號分隔）
+#              SMTP_USER 寄件 Gmail；SMTP_PASS 該 Gmail 的「應用程式密碼」（16 碼）
 on:
-  issues:
-    types: [opened, closed, edited]
+  workflow_dispatch:
+    inputs:
+      event:
+        description: opened / closed / edited
+        required: true
+      id:
+        description: booking id
+        required: true
 
 permissions:
   contents: read
-  issues: read
+
+concurrency:
+  group: notify-${{ github.event.inputs.id }}-${{ github.event.inputs.event }}
+  cancel-in-progress: false
 
 jobs:
   notify:
-    # 只處理標題為 [預約] 且由 repo 擁有者（預約權杖）建立／關閉的 Issue，避免陌生人亂開 Issue 造成垃圾信；現場客、住宿客（代號含「現場」「住宿」）不寄信
-    if: startsWith(github.event.issue.title, '[預約]') && github.actor == github.repository_owner && !contains(github.event.issue.title, ' 現場') && !contains(github.event.issue.title, ' 住宿')
     runs-on: ubuntu-latest
     steps:
       - name: Send email
         env:
+          API_URL: ${{ vars.API_URL }}
+          NOTIFY_SECRET: ${{ secrets.NOTIFY_SECRET }}
           NOTIFY_TO: ${{ secrets.NOTIFY_TO }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          GH_TOKEN: ${{ github.token }}
+          EV: ${{ github.event.inputs.event }}
+          BID: ${{ github.event.inputs.id }}
         run: |
           python3 - <<'PY'
-          import json, os, re, smtplib, sys
+          import json, os, re, smtplib, sys, urllib.request
           from email.message import EmailMessage
 
+          # 注意：這個 repo 是公開的，Actions 記錄任何人都看得到，所以這裡不印出任何姓名、電話、email。
           to = [x.strip() for x in os.environ.get("NOTIFY_TO", "").split(",") if x.strip()]
           user, pw = os.environ.get("SMTP_USER", ""), os.environ.get("SMTP_PASS", "")
-          if not (to and user and pw):
-              print("::warning::尚未設定 NOTIFY_TO / SMTP_USER / SMTP_PASS，略過寄信")
+          api, secret = os.environ.get("API_URL", "").rstrip("/"), os.environ.get("NOTIFY_SECRET", "")
+          action, bid = os.environ.get("EV", ""), os.environ.get("BID", "")
+          if not (to and user and pw and api and secret):
+              print("::warning::尚未設定 API_URL / NOTIFY_SECRET / NOTIFY_TO / SMTP_USER / SMTP_PASS，略過寄信")
               sys.exit(0)
+          if action not in ("opened", "closed", "edited") or not re.fullmatch(r"[0-9a-f-]{8,64}", bid):
+              print("::error::參數不正確"); sys.exit(1)
 
-          ev = json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))
-          issue, action = ev["issue"], ev["action"]
-          m = re.search(r"```json\s*(.*?)```", issue.get("body") or "", re.S)
+          rq = urllib.request.Request(api + "/api/internal/notify?id=" + bid, headers={"X-Notify-Secret": secret, "User-Agent": "picnic-notify"})
           try:
-              b = json.loads(m.group(1)) if m else {}
-          except Exception:
-              b = {}
+              b = json.load(urllib.request.urlopen(rq, timeout=20))["booking"]
+          except Exception as ex:
+              print("::error::向後端取得預約資料失敗：", type(ex).__name__); sys.exit(1)
 
           changes = []
           if action == "edited":
-              # 只有「客人自行修改」才寄信：最後一筆修改紀錄的修改人是「客人」，且時間與這次編輯相差在 3 分鐘內
-              from datetime import datetime
-              hist = b.get("history") or []
-              last = hist[-1] if hist and isinstance(hist[-1], dict) else {}
-              try:
-                  gap = abs((datetime.fromisoformat(str(issue["updated_at"]).replace("Z", "+00:00")) - datetime.fromisoformat(str(last["at"]).replace("Z", "+00:00"))).total_seconds())
-              except Exception:
-                  gap = 1e9
-              if last.get("by") != "客人" or gap > 180 or issue.get("state") == "closed":
-                  print("非客人修改（或預約已取消），略過寄信")
-                  sys.exit(0)
+              last = (b.get("history") or [{}])[-1]
               changes = [c for c in (last.get("changes") or []) if isinstance(c, dict)]
-
           cancelled = action == "closed"
+          ses = {"am": "上午場", "pm": "下午場"}.get(b.get("session"), str(b.get("session", "")))
           head = "預約取消" if cancelled else ("預約變更" if action == "edited" else "新預約")
-          lines = [f"【{head}】{issue['title'].replace('[預約]', '').strip()}", ""]
-          if b:
-              people = f"大人 {b.get('adults', 0)}・孩童 {b.get('children', 0)}"
-              extra = []
-              if b.get("pets"): extra.append(f"毛小孩 {b['pets']} 隻")
-              if b.get("cars") is not None: extra.append(f"車 {b['cars']} 輛")
-              if b.get("addonQty"): extra.append(f"加購 {b['addonQty']}")
-              lines += [
-                  f"姓名：{b.get('name', '')}",
-                  f"手機：{b.get('phone', '')}",
-                  f"Email：{b.get('email', '')}",
-                  f"日期：{b.get('date', '')}　預計抵達：{b.get('arrival', '')}",
-                  f"人數：{people}" + ("・" + "・".join(extra) if extra else ""),
-                  f"預估金額：NT$ {int(b.get('total', 0)):,}（費用皆為現場收取）",
-                  f"預約代號：{b.get('code', '')}",
-              ]
-              if b.get("note"): lines.append(f"備註：{b['note']}")
+          lines = [f"【{head}】{b.get('date', '')} {ses} {b.get('code', '')}", ""]
+          people = f"大人 {b.get('adults', 0)}・孩童 {b.get('children', 0)}"
+          extra = []
+          if b.get("pets"): extra.append(f"毛小孩 {b['pets']} 隻")
+          if b.get("cars") is not None: extra.append(f"車 {b['cars']} 輛")
+          if b.get("addonQty"): extra.append(f"加購 {b['addonQty']}")
+          lines += [
+              f"姓名：{b.get('name', '')}", f"手機：{b.get('phone', '')}", f"Email：{b.get('email', '')}",
+              f"日期：{b.get('date', '')}　預計抵達：{b.get('arrival', '')}",
+              f"人數：{people}" + ("・" + "・".join(extra) if extra else ""),
+              f"預估金額：NT$ {int(b.get('total', 0)):,}（費用皆為現場收取）", f"預約代號：{b.get('code', '')}",
+          ]
+          if b.get("note"): lines.append(f"備註：{b['note']}")
           if changes:
               lines += ["", "客人修改了以下項目："] + [f"．{c.get('f', '')}：{c.get('from', '')} → {c.get('to', '')}" for c in changes]
           if cancelled:
-              lines += ["", "此預約已被取消（客人自行取消、後台取消，或同時預約時名額不足而自動取消）。"]
-          lines += ["", f"詳細資料：{issue['html_url']}"]
-
-          # 資料量提醒：預約（Issue）累積到 2400 筆（上限 3000 的 80%）以上，在通知信加上警告
-          warn = ""
-          try:
-              import urllib.request
-              rq = urllib.request.Request(
-                  "https://api.github.com/search/issues?per_page=1&q=" + "repo:" + os.environ.get("GITHUB_REPOSITORY", "") + "+is:issue",
-                  headers={"Authorization": "Bearer " + os.environ.get("GH_TOKEN", ""), "Accept": "application/vnd.github+json"})
-              total = json.load(urllib.request.urlopen(rq, timeout=20)).get("total_count", 0)
-              if total >= 2400:
-                  warn = f"⚠️【資料量提醒】預約資料已累積 {total} 筆（後台上限 3000 筆）。請登入後台先匯出 CSV，再用「清理舊資料」刪除已過去的日期區間。"
-                  lines = [warn, ""] + lines
-          except Exception as ex:
-              print("::warning::讀取資料量失敗，略過提醒：", ex)
+              lines += ["", "此預約已被取消（客人自行取消，或後台取消）。"]
+          lines += ["", "詳細資料請登入預約網站後台查看。"]
 
           msg = EmailMessage()
-          msg["Subject"] = ("【資料量將滿】" if warn else "") + f"【{head}】{b.get('date', '')} {b.get('name', '')}".strip()
+          msg["Subject"] = f"【{head}】{b.get('date', '')} {b.get('name', '')}".strip()
           msg["From"], msg["To"] = user, ", ".join(to)
           msg.set_content("\n".join(lines))
-          # 客人通知：只有客人填了 email 並勾選「寄送預約成功通知」才寄；內容只用經過格式檢查的欄位（不放姓名、備註），避免被拿來寄垃圾信
+
+          # 客人通知：只有客人填了 email 並勾選「寄送預約成功通知」才寄；內容只用經過格式檢查的欄位
           cust = None
           em = str(b.get("email", ""))
-          t = re.match(r"^\[預約\] (\d{4}-\d{2}-\d{2}) (\S{1,12}) (\d{9})$", issue["title"])
           if (b.get("emailOpt") is True and re.fullmatch(r"[^\s@,;<>]{1,64}@[^\s@,;<>]{1,200}\.[^\s@,;<>]{1,20}", em)
-                  and t and re.fullmatch(r"\d{2}:\d{2}", str(b.get("arrival", ""))) and action in ("opened", "closed", "edited")):
+                  and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(b.get("date", ""))) and re.fullmatch(r"\d{2}:\d{2}", str(b.get("arrival", "")))
+                  and re.fullmatch(r"\d{9}", str(b.get("code", "")))):
               repo = os.environ.get("GITHUB_REPOSITORY", "/")
               owner_, name_ = repo.split("/", 1)
               site = f"https://{owner_}.github.io/" + ("" if name_.lower() == f"{owner_}.github.io".lower() else name_ + "/")
-              try:
-                  n = lambda k: int(b.get(k, 0) or 0)
-                  money = f"NT$ {n('total'):,}"
-                  detail = [f"日期：{t.group(1)}　{t.group(2)}", f"預計抵達：{b['arrival']}",
-                            f"人數：大人 {n('adults')}・孩童 {n('children')}" + (f"・毛小孩 {n('pets')} 隻" if n('pets') else "") + f"・車 {n('cars')} 輛" + (f"・加購 {n('addonQty')}" if n('addonQty') else ""),
-                            f"預估金額：{money}（費用皆為現場收取）", f"預約代號：{t.group(3)}"]
-                  if cancelled:
-                      body = ["您好，您的預約已取消：", ""] + detail[:1] + [detail[-1], "", "如有疑問，歡迎與我們聯絡。"]
-                      subj = f"【預約取消】{t.group(1)}"
-                  elif action == "edited":
-                      body = ["您好，您的預約已更新，最新內容如下：", ""] + detail + ["", f"如需再次修改或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
-                      subj = f"【預約變更通知】{t.group(1)}"
-                  else:
-                      body = ["您好，您的預約已成立：", ""] + detail + ["", "📸 請截圖留存預約完成畫面作為憑證，入園時請出示。",
-                              f"如需查詢或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
-                      subj = f"【預約成功通知】{t.group(1)}"
-                  cust = EmailMessage(); cust["Subject"], cust["From"], cust["To"] = subj, user, em
-                  cust.set_content("\n".join(body))
-              except Exception as ex:
-                  print("::warning::客人通知信組信失敗，已略過：", ex); cust = None
+              n = lambda k: int(b.get(k, 0) or 0)
+              detail = [f"日期：{b['date']}　{ses}", f"預計抵達：{b['arrival']}",
+                        f"人數：大人 {n('adults')}・孩童 {n('children')}" + (f"・毛小孩 {n('pets')} 隻" if n('pets') else "") + f"・車 {n('cars')} 輛" + (f"・加購 {n('addonQty')}" if n('addonQty') else ""),
+                        f"預估金額：NT$ {n('total'):,}（費用皆為現場收取）", f"預約代號：{b['code']}"]
+              if cancelled:
+                  body = ["您好，您的預約已取消：", ""] + detail[:1] + [detail[-1], "", "如有疑問，歡迎與我們聯絡。"]
+                  subj = f"【預約取消】{b['date']}"
+              elif action == "edited":
+                  body = ["您好，您的預約已更新，最新內容如下：", ""] + detail + ["", f"如需再次修改或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
+                  subj = f"【預約變更通知】{b['date']}"
+              else:
+                  body = ["您好，您的預約已成立：", ""] + detail + ["", "📸 請截圖留存預約完成畫面作為憑證，入園時請出示。",
+                          f"如需查詢或取消，請至預約網站「預約查詢」，輸入手機號碼與預約代號：{site}", "", "（此信為系統自動發送，請勿直接回覆）"]
+                  subj = f"【預約成功通知】{b['date']}"
+              cust = EmailMessage(); cust["Subject"], cust["From"], cust["To"] = subj, user, em
+              cust.set_content("\n".join(body))
 
           with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
               s.login(user, pw)
               s.send_message(msg)
-              print("已寄出通知給", to)
+              print("已寄出店家通知")
               if cust:
                   s.send_message(cust)
                   print("已寄出客人通知")
