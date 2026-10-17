@@ -437,6 +437,13 @@
         <div id="stBox"></div>
       </div>
 
+      <div class="card" id="trafficCard">
+        <h2>流量統計（進站・下單）</h2>
+        <div class="hint" style="margin:0 0 8px">只記次數、不記個資。「訪客」＝當天第一次打開預約頁的瀏覽器（同一支手機一天只算一次）；你自己登入後台時不會被計入。數字從啟用這功能的那天開始累積。</div>
+        <div class="row"><select id="trDays"><option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option></select><button class="btn ghost small" id="trReload">重新整理</button></div>
+        <div id="trBox" style="margin-top:8px"></div>
+      </div>
+
       <div class="card" id="annCard">
         <h2>活動公告（顯示在預約頁最上方）</h2>
         <label class="inline"><input type="checkbox" id="anOn"><span>顯示公告</span></label>
@@ -1520,6 +1527,40 @@ function init(){
 
   bind();
   refreshBook();
+  track(["view"].concat(firstVisitToday() ? ["uv"] : []));
+}
+
+/* ========= 流量統計：只送「事件名稱」給 Worker，不含任何個資 ========= */
+function firstVisitToday(){
+  try{ const t = todayStr(); if(localStorage.getItem("picnic_uv") === t) return false; localStorage.setItem("picnic_uv", t); return true; }catch(e){ return false; }
+}
+const trackedOnce = {};
+function track(evs){
+  try{
+    if(!API.on() || GH.adminToken()) return;
+    evs = evs.filter(e => !trackedOnce[e]); if(!evs.length) return;
+    evs.forEach(e => trackedOnce[e] = 1);
+    fetch(CONFIG.apiUrl.replace(/\/+$/, "") + "/api/track", { method:"POST", headers:{ "Content-Type":"text/plain" }, body: JSON.stringify({ e: evs }), keepalive:true }).catch(() => {});
+  }catch(e){}
+}
+async function renderTraffic(){
+  const box = $("trBox"); if(!box) return;
+  if(!Store.remote){ box.innerHTML = `<div class="hint">本機測試模式沒有流量統計。</div>`; return; }
+  const days = Number($("trDays").value) || 30;
+  box.innerHTML = `<div class="hint">讀取中…</div>`;
+  let r; try{ r = await API.call("GET", "/api/admin/traffic?days=" + days, undefined, true); }
+  catch(e){ box.innerHTML = `<div class="hint" style="color:#b3412f">${esc(e.message)}（請確認已更新 Worker）</div>`; return; }
+  const tz = new Intl.DateTimeFormat("sv-SE", { timeZone:"Asia/Taipei" });
+  const bk = {};
+  Store.all().forEach(b => { if(b.walkin || b.lodging || !b.createdAt) return; const d = tz.format(new Date(b.createdAt)); bk[d] = (bk[d] || 0) + 1; });
+  const rows = []; const t0 = new Date(todayStr() + "T00:00:00");
+  for(let i = 0; i < days; i++){ const d = new Date(t0); d.setDate(d.getDate() - i); const k = tz.format(d); const o = r.days[k] || {}; rows.push({ d:k, uv:o.uv || 0, view:o.view || 0, date:o.date || 0, submit:o.submit || 0, bk:bk[k] || 0 }); }
+  const sum = f => rows.reduce((a, x) => a + x[f], 0), uv = sum("uv"), b = sum("bk");
+  const pct = (a, c) => c ? Math.round(a / c * 1000) / 10 + "%" : "—";
+  box.innerHTML = `<div class="stat-total"><b>${days === 7 ? "近 7 天" : days === 30 ? "近 30 天" : "近 90 天"}</b><br>訪客 ${uv} 人・瀏覽 ${sum("view")} 次<br>選了日期 ${sum("date")} 人次（${pct(sum("date"), uv)}）→ 按送出 ${sum("submit")} 人次 → 成功預約 ${b} 筆<br><b>下單率（成功預約 ÷ 訪客）：${pct(b, uv)}</b></div>
+    <div style="overflow-x:auto;margin-top:8px"><table class="dy-table" style="min-width:320px"><thead><tr><th>日期</th><th class="n">訪客</th><th class="n">瀏覽</th><th class="n">選日期</th><th class="n">按送出</th><th class="n">預約</th></tr></thead><tbody>`
+    + rows.filter(x => x.uv || x.view || x.bk).map(x => `<tr><td>${esc(x.d.slice(5))}</td><td class="n">${x.uv}</td><td class="n">${x.view}</td><td class="n">${x.date}</td><td class="n">${x.submit}</td><td class="n">${x.bk}</td></tr>`).join("")
+    + `</tbody></table></div>` + (rows.some(x => x.uv || x.view) ? "" : `<div class="hint">還沒有資料——更新並部署後，客人打開預約頁就會開始累積。</div>`);
 }
 
 // 會受「網站內容」影響的畫面文字與選單（儲存後會重跑一次）
@@ -1810,6 +1851,7 @@ function renderPrice(){
 }
 
 function selectDate(s){
+  track(["date"]);
   $("date").value = s;
   $("session").value = "";
   $("arrival").value = "";                   // 換日期就重設抵達時間，避免沿用上一個日期／場次的選擇
@@ -2000,6 +2042,7 @@ function bind(){
   try{ const sv = localStorage.getItem("picnic_admin_sort"); if(sv && [...$("fSort").options].some(o => o.value === sv)) $("fSort").value = sv; }catch(e){}
   $("fSort").addEventListener("change", () => { try{ localStorage.setItem("picnic_admin_sort", $("fSort").value); }catch(e){} renderAdminList(); });
   $("stDate").addEventListener("change", renderStats);
+  $("trDays").addEventListener("change", renderTraffic); $("trReload").addEventListener("click", () => Store.load().then(renderTraffic).catch(renderTraffic));
   $("stPdf").addEventListener("click", exportStatsPdf);
   $("stChips").addEventListener("click", e => {
     const b = e.target.closest("[data-st]"); if(!b) return;
@@ -2016,6 +2059,7 @@ function bind(){
 
 /* ========= 送出預約 ========= */
 function submitBooking(){
+  track(["submit"]);
   const out = $("bookMsg");
   const date = $("date").value;
   const sid = $("session").value;
@@ -3027,7 +3071,7 @@ function renderAdmin(){
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); renderTraffic(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
@@ -3335,5 +3379,8 @@ if(Store.remote){
 </script>
 
 <div id="printArea" aria-hidden="true"></div>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "cc51cba675e04fcc96d6e2b512da6064"}'></script>
+<!-- End Cloudflare Web Analytics -->
 </body>
 </html>
