@@ -223,6 +223,8 @@
   .scell small{margin-top:4px}
 
   /* 後台統計 */
+  #statCard{background:#fff3b0;border:1px solid #e8cf55}
+  #statCard .stat-total,#statCard .stat-sess{background:#fffbe3}
   .stat-total{background:#eef7f0;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
   .stat-sess{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:14px}
   .stat-sess .h{font-weight:700}
@@ -401,9 +403,11 @@
     <div id="adminPanel" class="hidden">
       <div class="fold-bar"><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
-      <div class="card" id="setsCard">
-        <h2>明日野餐套組</h2>
-        <div id="setsBox"></div>
+      <div class="card" id="statCard">
+        <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
+        <input type="date" id="stDate">
+        <div id="stChips" style="margin-top:6px"></div>
+        <div id="stBox"></div>
       </div>
 
       <div class="card" id="invCard">
@@ -451,13 +455,6 @@
         <div class="cap-banner hidden" id="capBanner"></div>
         <div class="hint" id="fStat"></div>
         <div id="adminList" style="margin-top:12px"></div>
-      </div>
-
-      <div class="card">
-        <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
-        <input type="date" id="stDate">
-        <div id="stChips" style="margin-top:6px"></div>
-        <div id="stBox"></div>
       </div>
 
       <div class="card" id="dpCard">
@@ -709,6 +706,10 @@
       <h2>野餐套組追蹤</h2>
       <div class="hint">請先登入管理後台，才能使用。</div>
       <button class="btn" id="kitGoAdmin">前往管理後台登入</button>
+    </div>
+    <div class="card hidden" id="setsCard">
+      <h2>明日野餐套組</h2>
+      <div id="setsBox"></div>
     </div>
     <details class="card fold" id="lodgeCard">
       <summary><h2>新增住宿客人的套組預約</h2></summary>
@@ -2199,9 +2200,9 @@ function prepayHtml(b){
 function renderKit(){
   if(!$("kitList")) return;
   const logged = isAdminLogged();
-  $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged); $("lodgeCard").classList.toggle("hidden", !logged);
+  $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged); $("lodgeCard").classList.toggle("hidden", !logged); $("setsCard").classList.toggle("hidden", !logged);
   if(!logged) return;
-  renderDeposits();
+  renderDeposits(); renderTomorrowSets();
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
