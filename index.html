@@ -318,6 +318,8 @@
       </figure>
       <label for="addon" id="addonLabel" style="margin-top:10px"></label>
       <select id="addon"></select>
+      <div class="hint" id="addonStock"></div>
+      <div id="extraItems"></div>
 
       <h2 class="sec">6. 聯絡資料</h2>
       <label for="name" style="margin-top:0">姓名 *</label>
@@ -404,6 +406,33 @@
         <div id="setsBox"></div>
       </div>
 
+      <div class="card" id="invCard">
+        <h2>租借品項與每日數量</h2>
+        <div class="hint" style="margin:0 0 8px">設定每個品項（野餐套組、野餐椅…）<b>每天最多能租幾個</b>。額滿或被你關閉的那天，客人在預約頁會看到「已額滿／未開放」，不能再加購（仍可只訂入園）。已經成立的預約不會被取消。上午、下午場合計算同一個每日數量。</div>
+        <div id="invItems"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn ghost small" id="invAdd">＋ 新增租借品項</button>
+          <button class="btn" id="invSave">儲存品項與預設數量</button>
+        </div>
+        <div id="invMsg"></div>
+        <h3 style="margin:18px 0 6px;font-size:16px">單日調整／提早關閉</h3>
+        <div class="hint" style="margin:0 0 6px">下表是接下來開放預約的日子：「已預約／上限」。按「關閉」這天就不能再租；按「恢復預設」回到上面設定的每日數量。</div>
+        <div id="invDays"></div>
+        <h3 style="margin:18px 0 6px;font-size:16px">一次設定多天</h3>
+        <div class="grid2">
+          <div><label for="invFrom" style="margin-top:0">從</label><input type="date" id="invFrom"></div>
+          <div><label for="invTo" style="margin-top:0">到</label><input type="date" id="invTo"></div>
+          <div><label for="invItem">品項</label><select id="invItem"></select></div>
+          <div><label for="invQty">當日數量</label><input type="number" min="0" id="invQty" placeholder="例如 6"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn ghost small" id="invSet">套用這個數量</button>
+          <button class="btn ghost small" id="invClose">全部關閉</button>
+          <button class="btn ghost small" id="invReset">恢復預設</button>
+        </div>
+        <div id="invRangeMsg"></div>
+      </div>
+
       <div class="card">
         <h2>預約清單</h2>
         <div class="row">
@@ -476,10 +505,6 @@
             <label for="setMax" style="margin-top:0">最遠開放幾天內</label>
             <input type="number" id="setMax" min="1" max="365">
             <small>21 = 只開放未來三週</small>
-          </div>
-          <div>
-            <label for="setPer">單筆人數上限</label>
-            <input type="number" id="setPer" min="1" max="50">
           </div>
         </div>
         <button class="btn" id="saveSettingsBtn">儲存設定</button>
@@ -615,7 +640,7 @@
         <textarea id="ctInfo" rows="8"></textarea>
         <div class="hint">裡面的 <code>{場次}</code>（每週開放場次）、<code>{期間}</code>（目前可預約的日期範圍）、<code>{天數}</code>（開放未來幾天）會自動換成最新內容；不想自動更新就直接改成文字。沒修改過時，票價等文字會跟著上方欄位自動更新。</div>
         <button type="button" class="btn ghost small" id="ctInfoReset" style="margin-top:6px">還原為預設內容</button>
-        <label for="ctNotices">注意事項（一行一條；<code>{max}</code> 會自動換成單筆人數上限）</label>
+        <label for="ctNotices">注意事項（一行一條）</label>
         <textarea id="ctNotices" rows="6"></textarea>
         <label for="ctPetRule">毛小孩規定（選擇毛小孩隻數時顯示）</label>
         <textarea id="ctPetRule" rows="2"></textarea>
@@ -736,7 +761,8 @@
       <div><label for="cuAdults">大人</label><select id="cuAdults"></select></div>
       <div><label for="cuChildren">孩童</label><select id="cuChildren"></select></div>
       <div><label for="cuPets">毛小孩</label><select id="cuPets"></select></div>
-      <div><label for="cuAddon" id="cuAddonLabel">野餐套組</label><select id="cuAddon"></select></div>
+      <div><label for="cuAddon" id="cuAddonLabel">野餐套組</label><select id="cuAddon"></select><div class="hint" id="cuAddonStock"></div></div>
+      <span id="cuExtras" style="display:contents"></span>
     </div>
     <label for="cuEmail">電子信箱（選填）</label><input id="cuEmail" type="email" autocomplete="email">
     <label class="inline"><input type="checkbox" id="cuEmailOpt"><span>寄送預約變更通知到這個信箱</span></label>
@@ -764,6 +790,7 @@
       <div><label for="edPets">毛小孩（隻）</label><input id="edPets" type="number" min="0"></div>
       <div><label for="edCars">車輛數</label><input id="edCars" type="number" min="0"></div>
       <div><label for="edAddon">加購數量</label><input id="edAddon" type="number" min="0"></div>
+      <span id="edExtras" style="display:contents"></span>
       <div><label for="edTotal">預估金額（元）</label><input id="edTotal" type="number" min="0"></div>
     </div>
     <label class="inline" id="edPaidRow"><input type="checkbox" id="edDepositPaid"><span id="edPaidText">已付訂金</span></label>
@@ -825,7 +852,7 @@ const CONFIG = {
 
   sessions: [
     { id: "am", label: "上午場", short: "早", time: "10:30", arrive: ["10:30", "14:00"] },
-    { id: "pm", label: "下午場", short: "午", time: "14:00", arrive: ["14:00", "17:00"] }
+    { id: "pm", label: "下午場", short: "午", time: "14:00", arrive: ["14:00", "16:30"] }
   ],
   arrivalStepMinutes: 30,                  // 預計抵達時間的選項間隔
   petFee: 50,                              // 毛小孩每隻費用（元）；0 = 不收費
@@ -874,7 +901,6 @@ const CONFIG = {
   notices: [                                // {max} 會自動換成單筆人數上限
     "建議事先預約野餐套組，現場輕食數量有限",
     "務必填寫正確的手機號碼，否則視為無效訂單",
-    "單筆最多 {max} 位，超過請分成兩張訂單填寫",
     "當日臨時想入園，請改由官方 LINE 或電話預約",
     "攜帶寵物須繫繩並清理排泄物；特定日期不開放寵物入園"
   ]
@@ -1008,6 +1034,15 @@ const Vault = {
   }
 };
 
+/* ========= 租借品項（野餐套組 + 之後新增的野餐椅…）========= */
+const qtyOf = (b, id) => id === "set" ? (+b.addonQty || 0) : (+((b.extras || {})[id]) || 0);
+function extraItems(){
+  const S = Store.settings();
+  return (Array.isArray(S.items) ? S.items : []).filter(it => it && /^[a-z][a-z0-9]{0,11}$/.test(String(it.id)) && it.id !== "set" && String(it.name || "").trim())
+    .slice(0, 8).map(it => ({ id:it.id, name:String(it.name).trim(), unit:String(it.unit || "個").trim() || "個", price:Math.max(0, +it.price || 0), max:Math.min(20, Math.max(1, +it.max || 5)) }));
+}
+function allItems(){ const A = CONFIG.addon; return [{ id:"set", name:A.name, unit:A.unit, price:A.price, max:A.max, isSet:true }].concat(extraItems()); }
+const extrasText = b => extraItems().filter(it => qtyOf(b, it.id)).map(it => `${it.name} ${qtyOf(b, it.id)} ${it.unit}`).join("・");
 const Store = {
   KEY: "picnic_bookings_v2",
   NOPET: "picnic_nopet_v2",
@@ -1015,7 +1050,7 @@ const Store = {
   SETTINGS: "picnic_settings_v4",
   remote: GH.on() || API.on(),
   api: API.on(),
-  _used: {},
+  _used: {}, _stockUsed: {},
   _b: [], _s: {}, _q: Promise.resolve(), onSync: null,
   read(k){ try{ const v = JSON.parse(localStorage.getItem(k)); return Array.isArray(v) ? v : []; }catch(e){ return []; } },
   all(){ return this.remote ? this._b : this.read(this.KEY); },
@@ -1049,7 +1084,7 @@ const Store = {
     else localStorage.setItem(this.SETTINGS, JSON.stringify(S));
   },
   resetSettings(){
-    if(this.remote){ this._s = { noPets: this._s.noPets || [], petDays: this._s.petDays || [] }; this.persist(); }
+    if(this.remote){ this._s = { noPets: this._s.noPets || [], petDays: this._s.petDays || [], items: this._s.items || [], stock: this._s.stock || {} }; this.persist(); }
     else localStorage.removeItem(this.SETTINGS);
   },
   // 後台設定寫回 repo 的 settings.json（排隊逐一寫入，避免互相覆蓋）
@@ -1077,7 +1112,7 @@ const Store = {
     if(this.api){
       this.truncated = false;
       const pub = await API.call("GET", "/api/public");
-      this._s = pub.settings || {}; this._used = pub.used || {};
+      this._s = pub.settings || {}; this._used = pub.used || {}; this._stockUsed = pub.stockUsed || {};
       if(GH.adminToken()){ this._b = (await API.call("GET", "/api/admin/bookings", undefined, true)).bookings || []; this.rawCount = this._b.length; }
       return;
     }
@@ -1125,11 +1160,28 @@ const Store = {
     return m;
   },
   used(date, sid){ return this.usedMap()[date + "|" + sid] || 0; },
+  // 租借品項（id "set" = 野餐套組）每日數量：該日有單獨設定就用該日（0 = 當天關閉），否則用預設；null = 不限
+  stockLimit(id, date, S){
+    const st = ((S || this.settings()).stock || {})[id]; if(!st) return null;
+    if(st.byDate && Object.prototype.hasOwnProperty.call(st.byDate, date)) return Number(st.byDate[date]);
+    return (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def);
+  },
+  stockUsed(id, date){
+    if(this.api && !GH.adminToken()) return ((this._stockUsed || {})[id] || {})[date] || 0;
+    return this.all().filter(b => b.status === "confirmed" && b.date === date).reduce((n, b) => n + qtyOf(b, id), 0);
+  },
+  // 還剩多少可租（own = 正在修改的那筆預約，原本佔用的算回去）；不限 = Infinity
+  stockLeft(id, date, own){
+    const lim = this.stockLimit(id, date); if(lim === null) return Infinity;
+    const mine = (own && own.status === "confirmed" && own.date === date) ? qtyOf(own, id) : 0;
+    return Math.max(0, lim - (this.stockUsed(id, date) - mine));
+  },
   remaining(date, sid, S){
     const c = dayRule(date, S || this.settings()).sessions[sid];
     return c && c.open ? Math.max(0, c.cap - this.used(date, sid)) : 0;
   },
   add(b){
+    for(const it of allItems()){ const q = qtyOf(b, it.id), l = this.stockLeft(it.id, b.date); if(q > l) return { ok:false, error:`${it.name}該日只剩 ${l} ${it.unit}` }; }
     const left = this.remaining(b.date, b.session);
     if(b.adults + b.children > left)
       return { ok:false, error:`該場次剩餘名額 ${left} 位，不足以預約 ${b.adults + b.children} 位` };
@@ -1439,10 +1491,32 @@ function renderStatic(){
   fillSelect($("cars"), 0, CONFIG.maxCars, 1, n => n === 0 ? "0 輛（不開車）" : `${n} 輛`);
   $("addonLabel").textContent = `加購 ${CONFIG.addon.name}（${money(CONFIG.addon.price)}／${CONFIG.addon.unit}）`;
   initAddonPhoto();
-  fillSelect($("addon"), 0, CONFIG.addon.max, 0, n => n === 0 ? "不加購" : `${n} ${CONFIG.addon.unit}`);
+  renderItemSelects();
   [["pets","p"],["cars","k"],["addon","q"]].forEach(([id,k]) => {
     if(keep[k] && [...$(id).options].some(o => o.value === keep[k])) $(id).value = keep[k];
   });
+}
+
+// 依日期的剩餘數量重建「加購」選單；額滿／當天關閉時不能選並顯示原因
+function fillItemSelect(sel, it, date, keep, own, hintEl, noun){
+  const left = date ? Store.stockLeft(it.id, date, own) : Infinity;
+  const mx = Math.max(0, left === Infinity ? it.max : Math.min(it.max, left));
+  fillSelect(sel, 0, mx, Math.min(keep, mx), n => n === 0 ? (noun || "不加購") : `${n} ${it.unit}`);
+  sel.disabled = !!date && mx === 0;
+  if(hintEl){
+    const lim = date ? Store.stockLimit(it.id, date) : null;
+    hintEl.textContent = (date && lim !== null) ? (left === 0 ? `⚠️ 這天的${it.name}已額滿／未開放，無法加購` : `這天${it.name}還剩 ${left} ${it.unit}`) : "";
+    hintEl.style.color = (date && lim !== null && left === 0) ? "var(--warn)" : "";
+  }
+}
+function renderItemSelects(){
+  const date = $("date").value, its = allItems();
+  fillItemSelect($("addon"), its[0], date, +$("addon").value || 0, null, $("addonStock"));
+  const box = $("extraItems"), keep = {};
+  box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
+  const ex = its.slice(1);
+  box.innerHTML = ex.map(it => `<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div>`).join("");
+  ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, keep[it.id] || 0, null, $("exh_" + it.id)));
 }
 
 // 加購商品照片：預設使用內嵌照片（單一檔案也看得到）；點一下放大，載入失敗時自動隱藏
@@ -1470,9 +1544,10 @@ function initAddonPhoto(){
   });
 }
 
-// 大人＋孩童合計不得超過「單筆上限」：選項只列到還能選的最大值
+// 單筆人數沒有上限（只受該場次剩餘名額限制）；下拉選單最多列到 MAXP
+const MAXP = 99;
 function refreshPeople(defA, defC){
-  const max = Store.settings().maxPeoplePerBooking;
+  const max = MAXP;
   let a = defA !== undefined ? defA : (+$("adults").value || 1), c = defC !== undefined ? defC : (+$("children").value || 0);
   a = Math.min(Math.max(a, 1), max); c = Math.min(Math.max(c, 0), max - a);
   fillSelect($("adults"), 1, max - c, a, n => `${n} 位`);
@@ -1505,6 +1580,7 @@ function refreshBook(){
   renderSessions();
   renderArrival();
   renderPet();
+  renderItemSelects();
   renderPrice();
 }
 
@@ -1529,7 +1605,7 @@ function renderInfo(S){
   const lines = (Array.isArray(CONFIG.infoFull) ? CONFIG.infoFull : autoInfoTemplate()).map(fill).filter(l => l.trim() !== "");
   $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + lines.map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
   refreshPeople();
-  $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.map(l => `<li>${esc(l.replace("{max}", S.maxPeoplePerBooking))}</li>`).join("") + "</ul>";
+  $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.filter(l => !String(l).includes("{max}")).map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
 }
 
 function renderCalendar(){
@@ -1651,8 +1727,10 @@ const addonDiscount = (adults, sets) => (CONFIG.addon.adultDiscount || 0) * Math
 function calc(){
   const a = +$("adults").value, c = +$("children").value, q = +$("addon").value;
   const pets = +$("pets").value || 0, petRate = petFeeOn($("date").value) ? CONFIG.petFee : 0;
+  const x = {}; let extraTotal = 0;
+  extraItems().forEach(it => { const sel = $("ex_" + it.id), n = sel ? (+sel.value || 0) : 0; if(n > 0){ x[it.id] = n; extraTotal += n * it.price; } });
   return {
-    a, c, q, pets, petRate,
+    a, c, q, pets, petRate, x, extraTotal,
     petTotal: pets * petRate,
     adultTotal: a * CONFIG.adultPrice,
     childTotal: c * CONFIG.childPrice,
@@ -1660,21 +1738,20 @@ function calc(){
     credit: a * CONFIG.adultCredit,
     discount: addonDiscount(a, q),
     discountN: Math.min(a, q * (CONFIG.addon.discountPerSet || 0)),
-    get total(){ return this.adultTotal + this.childTotal + this.addonTotal + this.petTotal - this.discount; }
+    get total(){ return this.adultTotal + this.childTotal + this.addonTotal + this.extraTotal + this.petTotal - this.discount; }
   };
 }
 
 function renderPrice(){
   const p = calc();
-  const max = Store.settings().maxPeoplePerBooking;
   const people = p.a + p.c;
-  const over = people > max;
-  $("peopleHint").textContent = over ? `⚠️ 共 ${people} 位，超過單筆上限 ${max} 位，請分成兩張訂單` : `共 ${people} 位（單筆上限 ${max} 位）`;
-  $("peopleHint").style.color = over ? "var(--warn)" : "";
+  $("peopleHint").textContent = `共 ${people} 位`;
+  $("peopleHint").style.color = "";
   $("priceBox").innerHTML = `
     <div class="line"><span>大人 ${p.a} × ${CONFIG.adultPrice}</span><span>${money(p.adultTotal)}</span></div>
     <div class="line"><span>孩童 ${p.c} × ${CONFIG.childPrice}</span><span>${money(p.childTotal)}</span></div>
     ${p.q ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${p.q} × ${CONFIG.addon.price}</span><span>${money(p.addonTotal)}</span></div>` : ""}
+    ${extraItems().filter(it => p.x[it.id]).map(it => `<div class="line"><span>${esc(it.name)} ${p.x[it.id]} × ${it.price}</span><span>${money(p.x[it.id] * it.price)}</span></div>`).join("")}
     ${p.petTotal ? `<div class="line"><span>毛小孩 ${p.pets} 隻 × ${p.petRate}</span><span>${money(p.petTotal)}</span></div>` : ""}
     ${p.discount ? `<div class="line"><span>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount}</span><span>－${money(p.discount)}</span></div>` : ""}
     <div class="line total"><span>預估總金額</span><span>${money(p.total)}</span></div>
@@ -1691,7 +1768,7 @@ function selectDate(s){
   msg($("bookMsg"), "", "");
   const oks = dayInfo(s).sessions.filter(x => x.state === "ok");
   if(oks.length === 1) $("session").value = oks[0].id;   // 只剩一場可選時自動選取
-  renderCalendar(); renderDateInfo(); renderSessions(); renderArrival(); renderPet();
+  renderCalendar(); renderDateInfo(); renderSessions(); renderArrival(); renderPet(); renderItemSelects(); renderPrice();
 }
 
 /* ========= 事件 ========= */
@@ -1722,6 +1799,7 @@ function bind(){
   ["adults","children"].forEach(id => $(id).addEventListener("change", () => refreshPeople()));
   ["adults","children","addon"].forEach(id => $(id).addEventListener("change", renderPrice));
   $("pets").addEventListener("change", renderPrice);
+  $("extraItems").addEventListener("change", renderPrice);
   $("email").addEventListener("input", () => {
     const v = $("email").value.trim(), good = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
     if(good && $("emailOpt").disabled) $("emailOpt").checked = true;      // 剛填好就預設勾選，客人可自行取消
@@ -1900,7 +1978,6 @@ function submitBooking(){
   const ses = info.sessions.find(x => x.id === sid);
   if(!ses || ses.state !== "ok"){ refreshBook(); return msg(out, "此場次已無法預約，請重新選擇", "err"); }
   if(p.a < 1) return msg(out, "至少需要 1 位大人", "err");
-  if(people > S.maxPeoplePerBooking) return msg(out, `單筆最多 ${S.maxPeoplePerBooking} 位，超過請分成兩張訂單`, "err");
   if(people > ses.rem) return msg(out, `${ses.label}剩餘名額 ${ses.rem} 位，不足以預約 ${people} 位`, "err");
   if(!name) return msg(out, "請填寫姓名", "err");
   if(!/^09\d{8}$/.test(phone)) return msg(out, "請輸入正確的手機號碼（09 開頭共 10 碼）", "err");
@@ -1910,12 +1987,17 @@ function submitBooking(){
   if(pets > 0 && isNoPetDay(date)) return msg(out, "當天不開放寵物入園", "err");
   if(!Number.isInteger(cars) || cars < 0 || cars > CONFIG.maxCars) return msg(out, `車輛數請選 0～${CONFIG.maxCars} 輛`, "err");
   if(!$("agree").checked) return msg(out, "請先勾選「我已詳閱上述注意事項」", "err");
+  for(const it of allItems()){
+    const q = it.id === "set" ? p.q : (p.x[it.id] || 0); if(!q) continue;
+    const l = Store.stockLeft(it.id, date);
+    if(q > l){ renderItemSelects(); renderPrice(); return msg(out, l <= 0 ? `${it.name}這天已額滿或未開放，請取消加購或改選其他日期` : `${it.name}這天只剩 ${l} ${it.unit}，請減少數量`, "err"); }
+  }
 
   const booking = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
     code: date.slice(5).replace("-", "") + phone.slice(-5),      // 例：10/20 + 手機末 5 碼 → 102070045
     date, session: sid, arrival,
-    adults: p.a, children: p.c, addonQty: p.q,
+    adults: p.a, children: p.c, addonQty: p.q, extras: p.x,
     pets, cars,
     name, phone, email, emailOpt: !!email && $("emailOpt").checked, note,
     petFee: p.petTotal, total: p.total, credit: p.credit, discount: p.discount,
@@ -1931,7 +2013,7 @@ function submitBooking(){
   $("doneSummary").innerHTML = `
     <div><b>${esc(showDate(date))}　${esc(ses.label)}</b></div>
     <div>預計 ${esc(arrival)} 抵達・車 ${cars} 輛</div>
-    <div>大人 ${p.a}・孩童 ${p.c}${pets ? `・毛小孩 ${pets} 隻` : ""}${p.q ? `・${esc(CONFIG.addon.name)} ${p.q} ${CONFIG.addon.unit}` : ""}</div>
+    <div>大人 ${p.a}・孩童 ${p.c}${pets ? `・毛小孩 ${pets} 隻` : ""}${p.q ? `・${esc(CONFIG.addon.name)} ${p.q} ${CONFIG.addon.unit}` : ""}${extraItems().filter(it => p.x[it.id]).map(it => `・${esc(it.name)} ${p.x[it.id]} ${esc(it.unit)}`).join("")}</div>
     <div>${esc(name)}　${esc(phone)}</div>
     ${p.petTotal ? `<div>毛小孩費用 ${p.pets} 隻 × ${p.petRate} ＝ ${money(p.petTotal)}</div>` : ""}
     ${p.discount ? `<div>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount} ＝ －${money(p.discount)}</div>` : ""}
@@ -1963,7 +2045,7 @@ function bookingCard(b, admin){
     <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled?"已取消":"已確認"}</span></div>
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
     ${b.lodging ? `<div><b>🛏 住宿客（僅套組追蹤，不計入入園人數）</b></div>` : ""}
-    <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}</div>
+    <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
     ${!cancelled && depositDue(b.addonQty || 0) ? (admin ? prepayHtml(b) : depositHtml(b.addonQty)) : ""}
@@ -2025,13 +2107,15 @@ function readEdit(){
   const n = id => Number($(id).value === "" ? NaN : $(id).value);
   return { date:$("edDate").value, session:$("edSession").value, arrival:$("edArrival").value, status:$("edStatus").value,
     adults:n("edAdults"), children:n("edChildren"), pets:n("edPets"), cars:n("edCars"), addonQty:n("edAddon"), total:n("edTotal"),
+    extras:(() => { const o = {}; document.querySelectorAll("#edExtras input").forEach(x => { const v = Number(x.value || 0); if(v > 0 || !Number.isFinite(v)) o[x.dataset.id] = v; }); return o; })(),
     name:$("edName").value.trim(), phone:$("edPhone").value.trim(), email:$("edEmail").value.trim(),
     note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim() };
 }
 function editCalc(){
   const e = readEdit(); if([e.adults, e.children, e.pets, e.addonQty].some(x => !Number.isFinite(x))) return null;
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0;
-  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate - addonDiscount(e.adults, e.addonQty);
+  const xt = extraItems().reduce((n, it) => n + (Number(e.extras[it.id]) || 0) * it.price, 0);
+  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - addonDiscount(e.adults, e.addonQty);
 }
 function updateEditCalc(){
   const q = Number($("edAddon").value) || 0, due = depositDue(q), lg = editingId && (Store.all().find(x => x.id === editingId) || {}).lodging;
@@ -2055,6 +2139,7 @@ function openEdit(id){
   $("edStatus").value = b.status;
   $("edAdults").value = b.adults; $("edChildren").value = b.children; $("edPets").value = petsOf(b); $("edCars").value = carsOf(b);
   $("edAddon").value = b.addonQty || 0; $("edTotal").value = b.total || 0;
+  $("edExtras").innerHTML = extraItems().map(it => `<div><label for="edEx_${it.id}">${esc(it.name)}（${esc(it.unit)}）</label><input id="edEx_${it.id}" data-id="${it.id}" type="number" min="0" value="${qtyOf(b, it.id)}"></div>`).join("");
   $("edDepositPaid").checked = !!kitOf(b).depositPaid;
   $("edName").value = b.name || ""; $("edPhone").value = b.phone || ""; $("edEmail").value = b.email || "";
   $("edNote").value = b.note || ""; $("edAdminNote").value = b.adminNote || "";
@@ -2068,6 +2153,7 @@ async function saveEdit(){
   const e = readEdit();
   if(!e.date) return msg(out, "請選擇日期", "err");
   if(![e.adults, e.children, e.pets, e.cars, e.addonQty, e.total].every(x => Number.isInteger(x) && x >= 0)) return msg(out, "人數、毛小孩、車輛、加購與金額請輸入 0 以上的整數", "err");
+  if(!Object.values(e.extras).every(x => Number.isInteger(x) && x >= 0)) return msg(out, "租借品項數量請輸入 0 以上的整數", "err");
   if(!old.lodging && e.adults + e.children < 1) return msg(out, "大人與孩童合計至少 1 位", "err");
   if(!e.name) return msg(out, "請填寫姓名", "err");
   if(!((old.walkin || old.lodging) && e.phone === "") && !/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼", "err");
@@ -2085,6 +2171,7 @@ async function saveEdit(){
     const was = k === "pets" ? petsOf(old) : k === "cars" ? carsOf(old) : k === "session" ? sessionOf(old) : (old[k] ?? (typeof e[k] === "number" ? 0 : ""));
     if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
   });
+  extraItems().forEach(it => { const was = qtyOf(old, it.id), now = e.extras[it.id] || 0; if(was !== now) changes.push({ f:it.name, from:was, to:now }); });
   const paidNow = $("edDepositPaid").checked;
   if(!!kitOf(old).depositPaid !== paidNow) changes.push({ f:"套組：已付訂金", from:kitOf(old).depositPaid ? "是" : "否", to:paidNow ? "是" : "否" });
   if(!changes.length) return msg(out, "沒有任何變更", "err");
@@ -2302,15 +2389,19 @@ function cuRead(){
   const n = id => Number($(id).value);
   return { date:$("cuDate").value, session:$("cuSession").value, arrival:$("cuArrival").value, cars:n("cuCars"),
     adults:n("cuAdults"), children:n("cuChildren"), pets:n("cuPets"), addonQty:n("cuAddon"),
+    extras:(() => { const o = {}; document.querySelectorAll("#cuExtras select").forEach(x => { if(+x.value > 0) o[x.dataset.id] = +x.value; }); return o; })(),
     email:$("cuEmail").value.trim(), note:$("cuNote").value.trim() };
 }
 function cuPrice(e){
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0, disc = addonDiscount(e.adults, e.addonQty);
-  return { disc, pets:e.pets * rate, total: e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + e.pets * rate - disc };
+  const xt = extraItems().reduce((n, it) => n + (e.extras[it.id] || 0) * it.price, 0);
+  return { disc, pets:e.pets * rate, xt, total: e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - disc };
 }
 function cuRender(){
   const b = Store.all().find(x => x.id === cuId); if(!b) return;
-  const e = cuRead(), S = Store.settings();
+  let e = cuRead(); const S = Store.settings();
+  { const its = allItems(); fillItemSelect($("cuAddon"), its[0], e.date, e.addonQty, b, $("cuAddonStock"));
+    its.slice(1).forEach(it => fillItemSelect($("cuEx_" + it.id), it, e.date, e.extras[it.id] || 0, b, null)); e = cuRead(); }
   // 場次選項：顯示剩餘名額（本筆原本佔用的名額算回去）
   const info = e.date ? dayInfo(e.date, S) : null;
   const keepSame = e.date === b.date;
@@ -2329,6 +2420,7 @@ function cuRender(){
     <div class="line"><span>大人 ${e2.adults} × ${CONFIG.adultPrice}</span><span>${money(e2.adults * CONFIG.adultPrice)}</span></div>
     <div class="line"><span>孩童 ${e2.children} × ${CONFIG.childPrice}</span><span>${money(e2.children * CONFIG.childPrice)}</span></div>
     ${e2.addonQty ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${e2.addonQty} × ${CONFIG.addon.price}</span><span>${money(e2.addonQty * CONFIG.addon.price)}</span></div>` : ""}
+    ${extraItems().filter(it => e2.extras[it.id]).map(it => `<div class="line"><span>${esc(it.name)} ${e2.extras[it.id]} × ${it.price}</span><span>${money(e2.extras[it.id] * it.price)}</span></div>`).join("")}
     ${pr.pets ? `<div class="line"><span>毛小孩 ${e2.pets} 隻</span><span>${money(pr.pets)}</span></div>` : ""}
     ${pr.disc ? `<div class="line"><span>套組折抵</span><span>－${money(pr.disc)}</span></div>` : ""}
     <div class="line total"><span>預估總金額</span><span>${money(pr.total)}</span></div>
@@ -2346,11 +2438,13 @@ function openCustomerEdit(id){
   $("cuDate").min = fmt(tomorrow); $("cuDate").max = mx > b.date ? mx : b.date;
   $("cuDate").value = b.date;
   const sel = (id, from, to, def, lab) => fillSelect($(id), from, to, def, lab);
-  sel("cuAdults", 0, S.maxPeoplePerBooking, b.adults, n => `${n} 位`);
-  sel("cuChildren", 0, S.maxPeoplePerBooking, b.children, n => `${n} 位`);
+  sel("cuAdults", 0, Math.max(MAXP, b.adults), b.adults, n => `${n} 位`);
+  sel("cuChildren", 0, Math.max(MAXP, b.children), b.children, n => `${n} 位`);
   sel("cuPets", 0, CONFIG.maxPets, petsOf(b), n => `${n} 隻`);
   sel("cuCars", 0, CONFIG.maxCars, carsOf(b), n => `${n} 輛`);
   sel("cuAddon", 0, CONFIG.addon.max, b.addonQty || 0, n => n === 0 ? "不加購" : `${n} ${CONFIG.addon.unit}`);
+  $("cuExtras").innerHTML = extraItems().map(it => `<div><label for="cuEx_${it.id}">加購 ${esc(it.name)}</label><select id="cuEx_${it.id}" data-id="${it.id}"></select></div>`).join("");
+  extraItems().forEach(it => sel("cuEx_" + it.id, 0, it.max, qtyOf(b, it.id), n => n === 0 ? "不加購" : `${n} ${it.unit}`));
   $("cuAddonLabel").textContent = `加購 ${CONFIG.addon.name}`;
   $("cuSession").innerHTML = `<option value="${esc(sessionOf(b))}"></option>`; $("cuSession").value = sessionOf(b);
   $("cuArrival").innerHTML = `<option value="${esc(b.arrival)}"></option>`; $("cuArrival").value = b.arrival;
@@ -2367,7 +2461,6 @@ async function saveCustomerEdit(){
   if(!e.date) return fail("請選擇入園日期");
   if(old.date <= todayStr()) return fail("當天或已過的預約無法線上修改，請來電");
   if(e.adults + e.children < 1) return fail("大人與孩童合計至少 1 位");
-  if(e.adults + e.children > S.maxPeoplePerBooking) return fail(`單筆最多 ${S.maxPeoplePerBooking} 位，請分成兩張訂單`);
   if(e.pets > 0 && isNoPetDay(e.date)) return fail("當天不開放寵物入園");
   if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return fail("電子信箱格式不正確（可留空）");
   const sameSlot = e.date === old.date && e.session === sessionOf(old);
@@ -2385,6 +2478,7 @@ async function saveCustomerEdit(){
     const was = k === "pets" ? petsOf(old) : k === "cars" ? carsOf(old) : k === "session" ? sessionOf(old) : (old[k] ?? (typeof e[k] === "number" ? 0 : ""));
     if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
   });
+  extraItems().forEach(it => { if(qtyOf(old, it.id) !== (e.extras[it.id] || 0)) changes.push({ f:it.name, from:qtyOf(old, it.id), to:e.extras[it.id] || 0 }); });
   if(!!old.emailOpt !== emailOpt) changes.push({ f:"寄送通知", from:old.emailOpt ? "是" : "否", to:emailOpt ? "是" : "否" });
   if(!changes.length) return fail("沒有任何變更");
   const now = new Date().toISOString();
@@ -2408,6 +2502,119 @@ function bindCustomerEdit(){
     if(id === "cuDate" || id === "cuSession") $("cuArrival").value = "";
     cuRender();
   }));
+  $("cuExtras").addEventListener("change", () => cuRender());
+}
+/* ========= 後台：租借品項與每日數量 ========= */
+const newItemId = () => "x" + Date.now().toString(36).slice(-7);
+const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), byDate: Object.assign({}, st.byDate || {}) }; };
+function invRowHtml(it, def){
+  const set = !!it.isSet, dis = set ? ` disabled title="套組的名稱、單價、折抵、訂金請到「網站內容」修改"` : "";
+  return `<div class="inv-row" data-id="${esc(it.id)}" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+    <b>${set ? "🧺 " : ""}${esc(it.name || "新品項")}</b>${set ? `<small style="color:var(--muted)">（名稱與價格在「網站內容」修改）</small>` : ""}
+    <div class="grid2">
+      <div><label>名稱</label><input class="iv-name" maxlength="20" value="${esc(it.name)}"${dis}></div>
+      <div><label>單位</label><input class="iv-unit" maxlength="6" value="${esc(it.unit)}"${dis}></div>
+      <div><label>單價（元）</label><input class="iv-price" type="number" min="0" value="${esc(it.price)}"${dis}></div>
+      <div><label>單筆預約最多</label><input class="iv-max" type="number" min="1" max="20" value="${esc(it.max)}"${dis}></div>
+    </div>
+    <label>每日數量（留空 = 不限）</label><input class="iv-def" type="number" min="0" placeholder="不限" value="${def === null ? "" : esc(def)}">
+    ${set ? "" : `<button class="btn ghost small iv-del" style="margin-top:6px">刪除這個品項</button>`}
+  </div>`;
+}
+function renderInventory(){
+  const S = Store.settings();
+  $("invItems").innerHTML = allItems().map(it => invRowHtml(it, stockOf(S, it.id).def)).join("");
+  $("invItem").innerHTML = allItems().map(it => `<option value="${esc(it.id)}">${esc(it.name)}</option>`).join("");
+  renderInvDays();
+}
+function renderInvDays(){
+  const S = Store.settings(), its = allItems(), t = todayStr(), n = Math.min(60, +S.maxAdvanceDays || 21);
+  const rows = [];
+  for(let i = 0; i <= n; i++){
+    const d = addDaysStr(t, i), info = dayRule(d, S);
+    if(!Object.values(info.sessions).some(x => x.open)) continue;
+    const cells = its.map(it => {
+      const lim = Store.stockLimit(it.id, d, S), used = Store.stockUsed(it.id, d), ov = Object.prototype.hasOwnProperty.call(stockOf(S, it.id).byDate, d);
+      const full = lim !== null && used >= lim, txt = lim === null ? `${used} / 不限` : `${used} / ${lim}`;
+      const btn = ov ? `<button class="btn ghost small iv-reset" data-id="${esc(it.id)}" data-d="${d}">恢復預設</button>` : (lim === 0 ? "" : `<button class="btn ghost small iv-close" data-id="${esc(it.id)}" data-d="${d}">關閉</button>`);
+      return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:4px"><span style="${lim === 0 ? "color:#b3261e;font-weight:700" : full ? "color:#b3261e" : ""}">${esc(it.name)} ${txt}${lim === 0 ? "（已關閉）" : full ? "（已額滿）" : ""}</span>${btn}</div>`;
+    }).join("");
+    rows.push(`<div style="border-bottom:1px solid var(--line);padding:6px 0"><b>${esc(showDate(d))}</b>${cells}</div>`);
+  }
+  $("invDays").innerHTML = rows.length ? rows.join("") : `<div class="hint">目前沒有開放預約的日子</div>`;
+}
+const addDaysStr = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return fmt(d); };
+function invCommit(S, text){
+  const t = todayStr();
+  Object.values(S.stock || {}).forEach(st => { if(st.byDate) Object.keys(st.byDate).forEach(d => { if(d < t) delete st.byDate[d]; }); });   // 清掉已過去日期的單日設定
+  Store.saveSettings(S); renderInventory(); refreshBook();
+  if(text) toast(text, "ok");
+}
+function invSetDays(id, dates, qty){          // qty: 數字 = 設定當日數量；null = 恢復預設
+  const S = Store.settings(); S.stock = JSON.parse(JSON.stringify(S.stock || {}));
+  const st = S.stock[id] = Object.assign({ def: null, byDate: {} }, S.stock[id] || {}); st.byDate = st.byDate || {};
+  const warn = [];
+  dates.forEach(d => {
+    if(qty === null) delete st.byDate[d]; else { st.byDate[d] = qty; const u = Store.stockUsed(id, d); if(u > qty) warn.push(`${showDate(d)} 已有 ${u}`); }
+  });
+  const it = allItems().find(x => x.id === id);
+  invCommit(S);
+  return { warn, it };
+}
+function invRange(mode){
+  const out = $("invRangeMsg"), f = $("invFrom").value, to = $("invTo").value || f, id = $("invItem").value;
+  if(!f) return msg(out, "請先選擇日期", "err");
+  if(to < f) return msg(out, "結束日期不能早於開始日期", "err");
+  const dates = []; for(let d = f; d <= to && dates.length <= 120; d = addDaysStr(d, 1)) dates.push(d);
+  if(dates.length > 120) return msg(out, "一次最多設定 120 天", "err");
+  let qty = null;
+  if(mode === "close") qty = 0;
+  else if(mode === "set"){
+    const raw = $("invQty").value.trim(); qty = raw === "" ? NaN : Number(raw);
+    if(!Number.isInteger(qty) || qty < 0 || qty > 9999) return msg(out, "請輸入 0 以上的整數數量", "err");
+  }
+  const r = invSetDays(id, dates, qty);
+  msg(out, `✔ 已${qty === null ? "恢復預設" : qty === 0 ? "關閉" : "設定為 " + qty + " " + r.it.unit}：${r.it.name}　共 ${dates.length} 天` + (r.warn.length ? `。提醒：${r.warn.join("、")} ${r.it.unit}的預約，已成立的預約不會被取消。` : ""), "ok");
+}
+function invSaveItems(){
+  const out = $("invMsg"), S = Store.settings(), items = [], stock = JSON.parse(JSON.stringify(S.stock || {}));
+  for(const row of document.querySelectorAll("#invItems .inv-row")){
+    const id = row.dataset.id, q = c => row.querySelector(c), raw = q(".iv-def").value.trim(), def = raw === "" ? null : Number(raw);
+    if(def !== null && (!Number.isInteger(def) || def < 0 || def > 9999)) return msg(out, "每日數量請輸入 0 以上的整數，或留空代表不限", "err");
+    stock[id] = Object.assign({ byDate: {} }, stock[id] || {}, { def });
+    if(id === "set") continue;
+    const name = q(".iv-name").value.trim(), unit = q(".iv-unit").value.trim() || "個", price = Number(q(".iv-price").value), max = Number(q(".iv-max").value);
+    if(!name) return msg(out, "請填寫品項名稱", "err");
+    if(!Number.isInteger(price) || price < 0 || price > 100000) return msg(out, `「${name}」單價請輸入 0 以上的整數`, "err");
+    if(!Number.isInteger(max) || max < 1 || max > 20) return msg(out, `「${name}」單筆預約最多請輸入 1～20`, "err");
+    items.push({ id, name, unit, price, max });
+  }
+  if(items.length > 8) return msg(out, "租借品項最多 8 種", "err");
+  Object.keys(stock).forEach(id => { if(id !== "set" && !items.some(i => i.id === id)) delete stock[id]; });
+  S.items = items; S.stock = stock;
+  invCommit(S); msg(out, Store.remote ? "已儲存，正在寫入" + BACKEND + "…" : "已儲存", "ok");
+}
+function bindInventory(){
+  $("invAdd").addEventListener("click", () => {
+    if(document.querySelectorAll("#invItems .inv-row").length >= 9) return msg($("invMsg"), "租借品項最多 8 種（另加套組）", "err");
+    $("invItems").insertAdjacentHTML("beforeend", invRowHtml({ id:newItemId(), name:"", unit:"張", price:0, max:5 }, null));
+    const last = $("invItems").lastElementChild; last.querySelector(".iv-name").focus();
+  });
+  $("invSave").addEventListener("click", invSaveItems);
+  $("invItems").addEventListener("click", e => {
+    const b = e.target.closest(".iv-del"); if(!b) return;
+    const row = b.closest(".inv-row"), name = row.querySelector(".iv-name").value || "這個品項";
+    if(!window.confirm(`確定刪除「${name}」？\n已成立的預約資料會保留，但客人與後台不會再顯示這個品項。`)) return;
+    row.remove(); msg($("invMsg"), "已從清單移除，請按「儲存品項與預設數量」才會生效", "ok");
+  });
+  $("invDays").addEventListener("click", e => {
+    const b = e.target.closest("button[data-d]"); if(!b) return;
+    const close = b.classList.contains("iv-close"), r = invSetDays(b.dataset.id, [b.dataset.d], close ? 0 : null);
+    toast(close ? `已關閉 ${showDate(b.dataset.d)} 的${r.it.name}` + (r.warn.length ? `（${r.warn[0]} ${r.it.unit}的預約仍保留）` : "") : `已恢復 ${showDate(b.dataset.d)} 的${r.it.name}預設數量`, "ok");
+  });
+  $("invSet").addEventListener("click", () => invRange("set"));
+  $("invClose").addEventListener("click", () => invRange("close"));
+  $("invReset").addEventListener("click", () => invRange("reset"));
 }
 /* ========= 現場報到 ========= */
 const isAdminLogged = () => Store.remote ? !!GH.adminToken() : (sessionStorage.getItem("picnic_admin") === "1" || localStorage.getItem("picnic_admin_saved") === "1");
@@ -2596,6 +2803,7 @@ async function importFromFile(){
   btn.disabled = false;
 }
 function bindPurge(){
+  bindInventory();
   $("imFileBtn").addEventListener("click", importFromFile);
   $("imBtn").addEventListener("click", importFromGithub);
   if(Store.api){ $("importCard").classList.remove("hidden"); try{ const m = /^([\w.-]+)\.github\.io\/([^/]+)/.exec(location.host + location.pathname); if(m) $("imRepo").value = m[1] + "/" + m[2]; }catch(e){} }
@@ -2631,6 +2839,7 @@ function bindEdit(){
   $("edSave").addEventListener("click", saveEdit);
   $("edSession").addEventListener("change", () => { fillEditArrival($("edSession").value, $("edArrival").value); updateEditCalc(); });
   ["edDate","edAdults","edChildren","edPets","edAddon"].forEach(id => $(id).addEventListener("input", updateEditCalc));
+  $("edExtras").addEventListener("input", updateEditCalc);
   $("edUseCalc").addEventListener("click", () => { const c = editCalc(); if(c !== null) $("edTotal").value = c; });
 }
 
@@ -2725,7 +2934,7 @@ function renderAdmin(){
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
@@ -2811,13 +3020,18 @@ function renderTomorrowSets(){
   const a = sets(tom), n = sets(tod), unit = CONFIG.addon.unit || "組";
   const hd = document.querySelector("#setsCard h2"); if(hd) hd.textContent = `明日野餐套組：${a.total} ${unit}`;   // 收合時標題就看得到數量
   const per = r => SESSIONS.map(x => `${esc(x.short || x.label)} ${r.bySession[x.id] || 0}`).join("　");
+  const exLine = date => extraItems().map(it => {
+    const n = Store.all().filter(b => b.date === date && b.status === "confirmed" && !b.walkin).reduce((m, b) => m + qtyOf(b, it.id), 0);
+    return n ? `${esc(it.name)} ${n} ${esc(it.unit)}` : "";
+  }).filter(Boolean).join("　");
   $("setsBox").innerHTML = `<div class="stat-total" style="text-align:center">
       <div style="font-size:14px">${esc(showDate(tom))}</div>
       <div style="font-size:42px;font-weight:800;line-height:1.2">${a.total} <span style="font-size:18px">${esc(unit)}</span></div>
       <div>${per(a)}${a.lodging ? `　（含住宿客 ${a.lodging}）` : ""}</div>
+      ${exLine(tom) ? `<div style="margin-top:6px;font-weight:700">${exLine(tom)}</div>` : ""}
       ${a.unpaid ? `<div style="color:#b3261e;margin-top:4px">⚠ ${a.unpaid} 筆訂單（${a.unpaidSets} ${esc(unit)}）訂金尚未確認</div>` : ""}
     </div>
-    <div class="hint" style="margin-top:8px">今日（${esc(showDate(tod))}）：${n.total} ${esc(unit)}　${per(n)}${n.lodging ? `（含住宿客 ${n.lodging}）` : ""}</div>`;
+    <div class="hint" style="margin-top:8px">今日（${esc(showDate(tod))}）：${n.total} ${esc(unit)}　${per(n)}${n.lodging ? `（含住宿客 ${n.lodging}）` : ""}${exLine(tod) ? `　${exLine(tod)}` : ""}</div>`;
 }
 
 // 「某場次 勾選＋人數上限」的小格子（每週設定與指定日期共用）
@@ -2847,7 +3061,6 @@ function renderSettings(){
   const S = Store.settings();
   $("setMin").value = S.minAdvanceDays;
   $("setMax").value = S.maxAdvanceDays;
-  $("setPer").value = S.maxPeoplePerBooking;
   $("weeklyBox").innerHTML = ORDER.map(wd => `
     <div class="wday" data-wd="${wd}"><b>週${WEEK[wd]}</b>
       <div class="grid2">${SESSIONS.map(x => sessionCell(x, S.weekly[wd][x.id].open, S.weekly[wd][x.id].cap)).join("")}</div>
@@ -2858,11 +3071,10 @@ function saveSettings(){
   const out = $("setMsg");
   const S = Store.settings();
   const num = id => { const v = $(id).value.trim(); return v === "" ? NaN : Number(v); };
-  const minA = num("setMin"), maxA = num("setMax"), per = num("setPer");
+  const minA = num("setMin"), maxA = num("setMax");
   if(!Number.isInteger(minA) || minA < 0 || minA > 365) return msg(out, "「最早提前幾天」請輸入 0～365 的整數", "err");
   if(!Number.isInteger(maxA) || maxA < 1 || maxA > 365) return msg(out, "「最遠開放幾天」請輸入 1～365 的整數", "err");
   if(maxA < minA) return msg(out, "「最遠開放幾天」不可小於「最早提前幾天」", "err");
-  if(!Number.isInteger(per) || per < 1 || per > 50) return msg(out, "「單筆人數上限」請輸入 1～50 的整數", "err");
 
   const weekly = {};
   for(const row of document.querySelectorAll("#weeklyBox .wday")){
@@ -2871,7 +3083,7 @@ function saveSettings(){
     if(r.error) return msg(out, `週${WEEK[wd]}：${r.error}`, "err");
     weekly[wd] = r.data;
   }
-  Object.assign(S, { minAdvanceDays:minA, maxAdvanceDays:maxA, maxPeoplePerBooking:per, weekly });
+  Object.assign(S, { minAdvanceDays:minA, maxAdvanceDays:maxA, weekly });
   Store.saveSettings(S);
   msg(out, "已儲存，客人端月曆會立即套用新設定", "ok");
 }
@@ -2943,9 +3155,9 @@ function exportCSV(list, filename){
     if(/^[=+\-@]/.test(s)) s = "'" + s;           // 防止試算表公式注入
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
+  const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","其他租借","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
   const rows = (list || Store.all()).map(b => [
-    b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty,
+    b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty, extrasText(b),
     b.name, b.phone, b.email, b.emailOpt ? "是" : "否", b.total, b.note, b.adminNote || "", (b.history || []).length, b.status === "confirmed" ? "已確認" : "已取消", b.createdAt
   ]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
