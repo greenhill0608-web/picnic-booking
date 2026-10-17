@@ -345,6 +345,9 @@
       <input id="name" autocomplete="name" maxlength="30">
       <label for="phone">行動電話 *</label>
       <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912345678" maxlength="10">
+      <label for="phone2">再次輸入行動電話 *（避免打錯）</label>
+      <input id="phone2" type="tel" inputmode="numeric" autocomplete="off" placeholder="請再輸入一次，不能貼上" maxlength="10">
+      <div class="hint" id="phoneHint"></div>
       <label for="email">電子信箱（選填）</label>
       <input id="email" type="email" autocomplete="email" maxlength="80">
       <label class="inline" id="emailOptRow" style="margin:6px 0 0"><input type="checkbox" id="emailOpt" disabled><span>寄送預約成功通知到這個信箱</span></label>
@@ -1823,6 +1826,14 @@ function bind(){
   ["adults","children"].forEach(id => $(id).addEventListener("change", () => refreshPeople()));
   ["adults","children","addon"].forEach(id => $(id).addEventListener("change", renderPrice));
   $("pets").addEventListener("change", renderPrice);
+  // 手機號碼要輸入兩次（第二欄不能貼上，必須自己再打一次）
+  const phoneCheck = () => {
+    const a = $("phone").value.trim(), b = $("phone2").value.trim(), h = $("phoneHint");
+    if(!b){ h.textContent = ""; return; }
+    const same = a === b; h.textContent = same ? "✓ 兩次輸入相符" : "兩次輸入的號碼不一致"; h.style.color = same ? "var(--green-d)" : "var(--warn)";
+  };
+  ["phone","phone2"].forEach(id => $(id).addEventListener("input", phoneCheck));
+  ["paste","drop"].forEach(ev => $("phone2").addEventListener(ev, e => { e.preventDefault(); toast("請自己再輸入一次手機號碼", "err"); }));
   $("extraItems").addEventListener("change", renderPrice);
   $("email").addEventListener("input", () => {
     const v = $("email").value.trim(), good = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -1992,7 +2003,7 @@ function submitBooking(){
   const pets = +$("pets").value;
   const cars = +$("cars").value;
   const name = $("name").value.trim();
-  const phone = $("phone").value.trim();
+  const phone = $("phone").value.trim(), phone2 = $("phone2").value.trim();
   const email = $("email").value.trim();
   const note = $("note").value.trim();
 
@@ -2006,6 +2017,7 @@ function submitBooking(){
   if(people > ses.rem) return msg(out, `${ses.label}剩餘名額 ${ses.rem} 位，不足以預約 ${people} 位`, "err");
   if(!name) return msg(out, "請填寫姓名", "err");
   if(!/^09\d{8}$/.test(phone)) return msg(out, "請輸入正確的手機號碼（09 開頭共 10 碼）", "err");
+  if(phone2 !== phone){ $("phone2").focus(); return msg(out, phone2 ? "兩次輸入的手機號碼不一致，請重新確認" : "請再輸入一次手機號碼確認", "err"); }
   if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return msg(out, "電子信箱格式不正確（可留空）", "err");
   if(!arrivalOptions(sid).includes(arrival)) return msg(out, "請選擇預計抵達時間", "err");
   if(!Number.isInteger(pets) || pets < 0 || pets > CONFIG.maxPets) return msg(out, `毛小孩隻數請選 0～${CONFIG.maxPets} 隻`, "err");
