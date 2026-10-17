@@ -223,6 +223,23 @@
   .scell small{margin-top:4px}
 
   /* 後台統計 */
+  #printArea{display:none}
+  @media print{
+    body > *:not(#printArea){display:none !important}
+    html,body{background:#fff !important;background-image:none !important}
+    body::before,body::after{display:none !important;background:none !important;content:none !important}
+    #printArea{display:block;color:#000;font-size:13px}
+    #printArea h1{font-size:20px;margin:0 0 4px}
+    #printArea .pr-sub{color:#444;margin:0 0 10px}
+    #printArea table{width:100%;border-collapse:collapse;margin-top:6px}
+    #printArea th,#printArea td{border:1px solid #777;padding:5px 6px;text-align:left;vertical-align:top}
+    #printArea th{background:#eee}
+    #printArea td.n,#printArea th.n{text-align:center}
+    #printArea tr.sub td{background:#f6f6f6;font-weight:700}
+    #printArea tr.tot td{background:#e6e6e6;font-weight:800}
+    #printArea tr{page-break-inside:avoid}
+    @page{size:A4 landscape;margin:12mm}
+  }
   #statCard{background:#fff3b0;border:1px solid #e8cf55}
   #statCard .stat-total,#statCard .stat-sess{background:#fffbe3}
   .stat-total{background:#eef7f0;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
@@ -405,7 +422,8 @@
 
       <div class="card" id="statCard">
         <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
-        <input type="date" id="stDate">
+        <div class="row"><input type="date" id="stDate"><button class="btn small" id="stPdf">匯出 PDF</button></div>
+        <div class="hint" style="margin:4px 0 0">PDF 內容：預約時段、預計入園時間、姓名、人數、毛小孩、車數、電話、套組數量（依上方選擇的日期）。</div>
         <div id="stChips" style="margin-top:6px"></div>
         <div id="stBox"></div>
       </div>
@@ -687,6 +705,11 @@
         <input id="ciPhone" class="ci-input" inputmode="numeric" pattern="[0-9]*" maxlength="5" autocomplete="off" placeholder="12345">
         <div id="ciMsg" class="ci-note"></div>
         <div id="ciResults"></div>
+      </div>
+      <div class="card" id="ciPending">
+        <h2 class="ci-h">今日未報到名單<span class="ci-badge" id="ciPendCount" style="margin-left:8px"></span></h2>
+        <div class="ci-fine" style="margin:0 0 8px">點一下姓名可看這筆預約的詳細資料與報到按鈕。</div>
+        <div id="ciPendList"></div>
       </div>
       <div class="card" id="ciWalk">
         <h2 class="ci-h">新增現場客（無預約）</h2>
@@ -1943,6 +1966,7 @@ function bind(){
   try{ const sv = localStorage.getItem("picnic_admin_sort"); if(sv && [...$("fSort").options].some(o => o.value === sv)) $("fSort").value = sv; }catch(e){}
   $("fSort").addEventListener("change", () => { try{ localStorage.setItem("picnic_admin_sort", $("fSort").value); }catch(e){} renderAdminList(); });
   $("stDate").addEventListener("change", renderStats);
+  $("stPdf").addEventListener("click", exportStatsPdf);
   $("stChips").addEventListener("click", e => {
     const b = e.target.closest("[data-st]"); if(!b) return;
     $("stDate").value = b.dataset.st; renderStats();
@@ -2644,7 +2668,33 @@ function renderCheckin(){
 }
 function ciSteps(box){ const g = f => +(box.querySelector(`[data-f="${f}"] [data-v]`) || { textContent:0 }).textContent; return { a:g("adults"), c:g("children"), p:g("pets") }; }
 function ciWalkTotal(){ const v = ciSteps($("ciWalkSteps")); $("ciWalkTotal").textContent = money(ticketTotal(todayStr(), v.a, v.c, v.p)); }
+// 今日尚未報到的預約（姓名、電話、人數；點開看詳細）
+const ciOpenIds = new Set();
+function renderCiPending(){
+  if(!$("ciPendList")) return;
+  const today = todayStr();
+  const ord = id => { const i = SESSIONS.findIndex(x => x.id === id); return i < 0 ? 99 : i; };
+  const list = Store.all().filter(b => !b.lodging && b.status === "confirmed" && b.date === today && !kitOf(b).checkedIn)
+    .sort((a, b) => ord(sessionOf(a)) - ord(sessionOf(b)) || String(a.arrival || "").localeCompare(String(b.arrival || "")));
+  $("ciPendCount").textContent = `${list.length} 組`;
+  $("ciPendList").innerHTML = list.length ? list.map(b => {
+    const ses = sessionById(sessionOf(b)), pets = petsOf(b), people = (+b.adults || 0) + (+b.children || 0);
+    return `<details class="ci-pend" data-id="${esc(b.id)}" ${ciOpenIds.has(b.id) ? "open" : ""} style="border-bottom:1px solid var(--line);padding:6px 0">
+      <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${esc(b.name || "（未填姓名）")}</b><span>${esc(b.phone || "—")}</span><span>${people} 位</span></summary>
+      <div style="margin:8px 0 4px;font-size:14px;line-height:1.7">
+        <div>${esc(ses ? ses.label + " " + ses.time : "")}・預計 ${esc(b.arrival || "—")} 抵達</div>
+        <div>大人 ${+b.adults || 0}・孩童 ${+b.children || 0}${pets ? `・毛小孩 ${pets} 隻` : ""}・車 ${carsOf(b)} 輛</div>
+        <div>${esc(CONFIG.addon.name)}：${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}` : "無"}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
+        <div>預約代號 ${esc(b.code)}・預估 ${money(b.total)}${b.email ? `・${esc(b.email)}` : ""}</div>
+        ${prepayHtml(b)}
+        ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
+        ${b.adminNote ? `<div class="adm-note">📝 ${esc(b.adminNote)}</div>` : ""}
+        ${b.phone ? `<button class="btn ci-btn" data-ci-go="${esc(b.phone.slice(-5))}" style="margin-top:8px">前往報到</button>` : ""}
+      </div></details>`;
+  }).join("") : `<div class="ci-note">今天的預約都已報到 🎉</div>`;
+}
 function ciSearch(){
+  renderCiPending();
   const q = $("ciPhone").value.replace(/\D/g, "").slice(0, 5), out = $("ciResults"), m = $("ciMsg");
   m.className = "ci-note";
   if(q.length < 5){ out.innerHTML = ""; m.textContent = q.length ? `再輸入 ${5 - q.length} 碼` : "輸入客人手機的最後 5 碼"; return; }
@@ -2724,6 +2774,12 @@ function bindCheckin(){
   });
   $("ciResults").addEventListener("click", e => { const b = e.target.closest("[data-ci-save]"); if(b){ const card = b.closest("[data-ci]"); ciSave(card.dataset.ci, card, b); } });
   $("ciPhone").addEventListener("input", ciSearch);
+  $("ciPendList").addEventListener("toggle", e => { const d = e.target; if(d && d.dataset && d.dataset.id){ d.open ? ciOpenIds.add(d.dataset.id) : ciOpenIds.delete(d.dataset.id); } }, true);
+  $("ciPendList").addEventListener("click", e => {
+    const b = e.target.closest("[data-ci-go]"); if(!b) return;
+    $("ciPhone").value = b.dataset.ciGo; ciSearch();
+    $("ciResults").scrollIntoView({ behavior:"smooth", block:"start" });
+  });
   $("ciSess").addEventListener("click", e => { const b = e.target.closest("[data-ses]"); if(!b) return; ciSession = b.dataset.ses; renderCheckin(); });
   $("ciWalkAdd").addEventListener("click", e => ciWalkAdd(e.currentTarget));
   $("ciGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
@@ -2980,6 +3036,35 @@ function renderStats(){
   $("stBox").innerHTML = html;
 }
 
+// 匯出當日統計 PDF：產生只含必要欄位的列印版面，再呼叫瀏覽器「列印 → 另存為 PDF」
+function exportStatsPdf(){
+  const date = $("stDate").value; if(!date) return toast("請先選擇日期", "err");
+  const all = Store.all().filter(b => b.status === "confirmed" && b.date === date);
+  const list = all.filter(b => !b.lodging), lodgeSets = all.filter(b => b.lodging).reduce((n, b) => n + (+b.addonQty || 0), 0);
+  if(!list.length && !lodgeSets) return toast("這天沒有預約可匯出", "err");
+  const ord = id => { const i = SESSIONS.findIndex(x => x.id === id); return i < 0 ? 99 : i; };
+  list.sort((a, b) => ord(sessionOf(a)) - ord(sessionOf(b)) || String(a.arrival || "").localeCompare(String(b.arrival || "")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const sum = rows => rows.reduce((o, b) => ({ p:o.p + (+b.adults || 0) + (+b.children || 0), pets:o.pets + petsOf(b), cars:o.cars + carsOf(b), sets:o.sets + (+b.addonQty || 0) }), { p:0, pets:0, cars:0, sets:0 });
+  const tr = (cls, c) => `<tr class="${cls}">${c.map((x, i) => `<td${[3, 4, 5, 7].includes(i) ? ' class="n"' : ""}>${x}</td>`).join("")}</tr>`;
+  let body = "";
+  const groups = [...new Set(list.map(b => sessionOf(b)))];
+  groups.forEach(sid => {
+    const rows = list.filter(b => sessionOf(b) === sid), ses = sessionById(sid), name = ses ? `${ses.label} ${ses.time}` : String(sid);
+    rows.forEach(b => { body += tr("", [esc(name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大人 ${+b.adults || 0}／孩童 ${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || ""]); });
+    const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 組`, "", t.p, t.pets, t.cars, "", t.sets]);
+  });
+  const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 組`, "", T.p, T.pets, T.cars, "", T.sets]);
+  const now = new Date();
+  $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　預約統計</h1>
+    <div class="pr-sub">${esc(showDate(date))}　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
+    <table><thead><tr><th>預約時段</th><th>預計入園</th><th>姓名</th><th class="n">人數</th><th class="n">毛小孩</th><th class="n">車數</th><th>電話</th><th class="n">${esc(CONFIG.addon.name)}（${esc(CONFIG.addon.unit)}）</th></tr></thead><tbody>${body}</tbody></table>`
+    + (lodgeSets ? `<div class="pr-sub" style="margin-top:8px">另有住宿客 ${lodgeSets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（未列入上表，不計入入園人數）</div>` : "");
+  const oldTitle = document.title; document.title = `預約統計-${date}`;
+  const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  window.print();
+}
+
 // 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消）；匯出 CSV 也用同一份
 function adminFiltered(){
   const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked;
@@ -3190,5 +3275,6 @@ if(Store.remote){
 } else { init(); syncAdminEntry(); }
 </script>
 
+<div id="printArea" aria-hidden="true"></div>
 </body>
 </html>
