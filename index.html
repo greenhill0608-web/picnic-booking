@@ -463,7 +463,7 @@
 
       <div class="card" id="trafficCard">
         <h2>流量統計（進站・下單）</h2>
-        <div class="hint" style="margin:0 0 8px">只記次數、不記個資。「訪客」＝當天第一次打開預約頁的瀏覽器（同一支手機一天只算一次）；你自己登入後台時不會被計入。數字從啟用這功能的那天開始累積。</div>
+        <div class="hint" style="margin:0 0 8px">只記次數、不記個資。每個數字都是「這一天」發生的人數，不是預約的入園日期：瀏覽＝當天打開預約頁的人；選日期＝當天有點選入園日期的人；預約完成＝當天客人線上預約成功的筆數。同一支手機一天只算一次；你自己登入後台時、後台代客預約與匯入的舊資料都不會計入。數字從啟用這功能的那天開始累積。</div>
         <div class="row"><select id="trDays"><option value="7">近 7 天</option><option value="30" selected>近 30 天</option><option value="90">近 90 天</option></select><button class="btn ghost small" id="trReload">重新整理</button></div>
         <div id="trBox" style="margin-top:8px"></div>
       </div>
@@ -518,8 +518,9 @@
             <option value="dateDesc">排序：入園日期（遠→近）</option>
           </select>
           <button class="btn ghost small" id="fClear">顯示全部</button>
-          <label class="inline" style="margin:0"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客</span></label>
+          <label class="inline" style="margin:0"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客／互惠客</span></label>
           <label class="inline" style="margin:0"><input type="checkbox" id="fHideCancel"><span>隱藏已取消</span></label>
+          <button class="btn small" id="paOpen" style="background:#d98a1f" title="替客人在後台直接新增預約：日期不限、當天也可以、電話可不填">＋ 代客預約</button>
           <button class="btn small" id="csvBtn" title="匯出目前清單顯示的內容（依日期與隱藏條件）">匯出 CSV</button>
         </div>
         <div class="cap-banner hidden" id="capBanner"></div>
@@ -788,9 +789,10 @@
       <div id="setsBox"></div>
     </div>
     <details class="card fold" id="lodgeCard">
-      <summary><h2>新增住宿客人的套組預約</h2></summary>
-      <div class="hint" style="margin:0 0 8px">住宿客人訂的野餐套組只在這裡追蹤，<b>不計入當日入園人數、名額與每日統計</b>。</div>
+      <summary><h2>新增住宿客／互惠客的套組預約</h2></summary>
+      <div class="hint" style="margin:0 0 8px">住宿客人、互惠客人訂的野餐套組只在這裡追蹤，<b>不計入當日入園人數、名額與每日統計</b>。互惠客的預估金額記為 0 元。</div>
       <div class="grid2">
+        <div><label for="lgType" style="margin-top:0">客人類別</label><select id="lgType"><option value="lodging">🛏 住宿客</option><option value="reciprocal">🤝 互惠客</option></select></div>
         <div><label for="lgDate" style="margin-top:0">用餐日期</label><input type="date" id="lgDate"></div>
         <div><label for="lgSession" style="margin-top:0">場次（可不指定）</label><select id="lgSession"></select></div>
         <div><label for="lgName">姓名／房號</label><input id="lgName" type="text" maxlength="30" placeholder="例：王先生／201 房"></div>
@@ -851,6 +853,36 @@
       <button class="btn ghost" id="cuClose" style="margin-top:0">取消</button>
     </div>
     <div class="hint">姓名、手機與預約代號無法修改；若要改，請取消後重新預約。當天或已過的預約請來電。</div>
+  </div>
+</div>
+<div class="modal-overlay hidden" id="proxyModal" role="dialog" aria-modal="true" aria-labelledby="paTitle">
+  <div class="edit-box">
+    <h2 id="paTitle">代客預約</h2>
+    <div class="hint" style="margin:0 0 8px">替客人新增預約：<b>日期不限（過去、今天都可以）</b>、<b>電話可不填</b>，不檢查名額與每日套組數量，但會計入統計與套組用量。</div>
+    <div class="grid2">
+      <div><label for="paDate">入園日期</label><input id="paDate" type="date"></div>
+      <div><label for="paSession">場次</label><select id="paSession"></select></div>
+      <div><label for="paArrival">預計抵達</label><select id="paArrival"></select></div>
+      <div><label for="paCars">車輛數</label><input id="paCars" type="number" min="0" value="0"></div>
+      <div><label for="paAdults">大人</label><input id="paAdults" type="number" min="0" value="2"></div>
+      <div><label for="paChildren">孩童</label><input id="paChildren" type="number" min="0" value="0"></div>
+      <div><label for="paPets">毛小孩（隻）</label><input id="paPets" type="number" min="0" value="0"></div>
+      <div><label for="paAddon">加購數量</label><input id="paAddon" type="number" min="0" value="0"></div>
+      <span id="paExtras" style="display:contents"></span>
+      <div><label for="paTotal">預估金額（元）</label><input id="paTotal" type="number" min="0" value="0"></div>
+    </div>
+    <div class="hint" id="paInfo" style="margin:4px 0"></div>
+    <div class="grid2">
+      <div><label for="paName">姓名</label><input id="paName" maxlength="30"></div>
+      <div><label for="paPhone">手機（可不填）</label><input id="paPhone" maxlength="10" inputmode="numeric" placeholder="不填也可以"></div>
+    </div>
+    <label for="paNote">客人備註</label><textarea id="paNote" rows="2" maxlength="200"></textarea>
+    <label for="paAdminNote">店家備註（內部記事）</label><textarea id="paAdminNote" rows="2" maxlength="500"></textarea>
+    <div id="paMsg"></div>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="paSave">新增預約</button>
+      <button class="btn ghost" id="paClose">取消</button>
+    </div>
   </div>
 </div>
 <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
@@ -1411,7 +1443,7 @@ const Store = {
   async createAdmin(b){
     if(this.api){ await API.call("POST", "/api/admin/booking", { booking: b }, true); return; }
     const ses = sessionById(b.session);
-    await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${b.date} ${ses ? ses.label : "住宿客"} ${b.code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
+    await GH.api("/issues", { method:"POST", admin:true, body:{ title:`[預約] ${b.date} ${ses ? ses.label : guestName(b)} ${b.code}`, body:"```json\n" + JSON.stringify(b, null, 2) + "\n```" } });
   },
   async cancelRemote(id){
     const b = this._b.find(x => x.id === id);
@@ -1562,7 +1594,10 @@ const trackedOnce = {};
 function track(evs){
   try{
     if(!API.on() || GH.adminToken()) return;
-    evs = evs.filter(e => !trackedOnce[e]); if(!evs.length) return;
+    evs = evs.filter(e => !trackedOnce[e]);
+    // 「選日期」「按送出」同一支手機一天只算一次，數字才是「人」而不是「次」
+    evs = evs.filter(e => { if(e !== "date" && e !== "submit") return true; try{ const k = "picnic_ev_" + e, t = todayStr(); if(localStorage.getItem(k) === t) return false; localStorage.setItem(k, t); }catch(x){} return true; });
+    if(!evs.length) return;
     evs.forEach(e => trackedOnce[e] = 1);
     fetch(CONFIG.apiUrl.replace(/\/+$/, "") + "/api/track", { method:"POST", headers:{ "Content-Type":"text/plain" }, body: JSON.stringify({ e: evs }), keepalive:true }).catch(() => {});
   }catch(e){}
@@ -1575,16 +1610,15 @@ async function renderTraffic(){
   let r; try{ r = await API.call("GET", "/api/admin/traffic?days=" + days, undefined, true); }
   catch(e){ box.innerHTML = `<div class="hint" style="color:#b3412f">${esc(e.message)}（請確認已更新 Worker）</div>`; return; }
   const tz = new Intl.DateTimeFormat("sv-SE", { timeZone:"Asia/Taipei" });
-  const bk = {};
-  Store.all().forEach(b => { if(b.walkin || b.lodging || !b.createdAt) return; const d = tz.format(new Date(b.createdAt)); bk[d] = (bk[d] || 0) + 1; });
   const rows = []; const t0 = new Date(todayStr() + "T00:00:00");
-  for(let i = 0; i < days; i++){ const d = new Date(t0); d.setDate(d.getDate() - i); const k = tz.format(d); const o = r.days[k] || {}; rows.push({ d:k, uv:o.uv || 0, view:o.view || 0, date:o.date || 0, submit:o.submit || 0, bk:bk[k] || 0 }); }
-  const sum = f => rows.reduce((a, x) => a + x[f], 0), uv = sum("uv"), b = sum("bk");
+  for(let i = 0; i < days; i++){ const d = new Date(t0); d.setDate(d.getDate() - i); const k = tz.format(d); const o = r.days[k] || {}; rows.push({ d:k, uv:o.uv || 0, view:o.view || 0, date:o.date || 0, submit:o.submit || 0, bk:o.done || 0 }); }
+  const sum = f => rows.reduce((a, x) => a + x[f], 0), uv = sum("uv"), dn = sum("bk"), dt = sum("date");
   const pct = (a, c) => c ? Math.round(a / c * 1000) / 10 + "%" : "—";
-  box.innerHTML = `<div class="stat-total"><b>${days === 7 ? "近 7 天" : days === 30 ? "近 30 天" : "近 90 天"}</b><br>訪客 ${uv} 人・瀏覽 ${sum("view")} 次<br>選了日期 ${sum("date")} 人次（${pct(sum("date"), uv)}）→ 按送出 ${sum("submit")} 人次 → 成功預約 ${b} 筆<br><b>下單率（成功預約 ÷ 訪客）：${pct(b, uv)}</b></div>
-    <div style="overflow-x:auto;margin-top:8px"><table class="dy-table" style="min-width:320px"><thead><tr><th>日期</th><th class="n">訪客</th><th class="n">瀏覽</th><th class="n">選日期</th><th class="n">按送出</th><th class="n">預約</th></tr></thead><tbody>`
-    + rows.filter(x => x.uv || x.view || x.bk).map(x => `<tr><td>${esc(x.d.slice(5))}</td><td class="n">${x.uv}</td><td class="n">${x.view}</td><td class="n">${x.date}</td><td class="n">${x.submit}</td><td class="n">${x.bk}</td></tr>`).join("")
-    + `</tbody></table></div>` + (rows.some(x => x.uv || x.view) ? "" : `<div class="hint">還沒有資料——更新並部署後，客人打開預約頁就會開始累積。</div>`);
+  const vis = rows.filter(x => x.uv || x.view || x.bk || x.date);
+  box.innerHTML = `<div class="stat-total"><b>${days === 7 ? "近 7 天" : days === 30 ? "近 30 天" : "近 90 天"}</b><br>${uv} 人瀏覽 → ${dt} 人選了日期（${pct(dt, uv)}）→ ${dn} 筆預約完成<br><b>完成率（預約完成 ÷ 瀏覽人數）：${pct(dn, uv)}</b></div>
+    <div style="overflow-x:auto;margin-top:8px"><table class="dy-table" style="min-width:300px"><thead><tr><th>日期</th><th class="n">瀏覽（人）</th><th class="n">選日期（人）</th><th class="n">預約完成（筆）</th></tr></thead><tbody>`
+    + vis.map(x => `<tr><td>${esc(x.d.slice(5))}</td><td class="n">${x.uv}</td><td class="n">${x.date}</td><td class="n">${x.bk}</td></tr>`).join("")
+    + `</tbody></table></div>` + (vis.length ? "" : `<div class="hint">還沒有資料——更新並部署後，客人打開預約頁就會開始累積。</div>`);
 }
 
 // 會受「網站內容」影響的畫面文字與選單（儲存後會重跑一次）
@@ -1992,7 +2026,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit();
+  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
   $("ctSave").addEventListener("click", saveContent);
   $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
@@ -2172,7 +2206,7 @@ function bookingCard(b, admin){
   <div class="booking ${cancelled?"cancelled":""}">
     <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled?"已取消":"已確認"}</span></div>
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
-    ${b.lodging ? `<div><b>🛏 住宿客（僅套組追蹤，不計入入園人數）</b></div>` : ""}
+    ${b.lodging ? `<div><b>${guestIcon(b)} ${guestName(b)}（僅套組追蹤，不計入入園人數）</b></div>` : ""}
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
@@ -2346,7 +2380,7 @@ function renderKit(){
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
     const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
-      <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">🛏 住宿客</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
+      <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">${guestIcon(b)} ${guestName(b)}</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
       <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}</div>
       ${b.note ? `<div style="color:var(--muted);white-space:pre-wrap">客人備註：${esc(b.note)}</div>` : ""}
       ${b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
@@ -2387,17 +2421,20 @@ async function saveKit(id, field, raw, el){
   if(!res.ok) toast(res.error || "儲存失敗", "err"); else toast("已儲存", "ok");
   renderKit(); renderAdminList();
 }
+const guestName = b => b && b.guest === "reciprocal" ? "互惠客" : "住宿客";
+const guestIcon = b => b && b.guest === "reciprocal" ? "🤝" : "🛏";
 async function addLodging(btn){
   const out = $("lgMsg"), date = $("lgDate").value, name = $("lgName").value.trim(), phone = $("lgPhone").value.trim();
   const qty = +$("lgQty").value, sid = $("lgSession").value, note = $("lgNote").value.trim();
   if(!date) return msg(out, "請選擇用餐日期", "err");
   if(!name) return msg(out, "請填寫姓名或房號", "err");
   if(phone && !/^09\d{8}$/.test(phone)) return msg(out, "電話請輸入 09 開頭共 10 碼，或留空", "err");
-  const now = new Date(), code = `住宿${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const guest = $("lgType").value === "reciprocal" ? "reciprocal" : "lodging";
+  const now = new Date(), code = `${guest === "reciprocal" ? "互惠" : "住宿"}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   const ses = sessionById(sid);
   const b = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), code, date, session:sid, arrival:"",
     adults:0, children:0, addonQty:qty, pets:0, cars:0, name, phone, email:"", emailOpt:false, note,
-    petFee:0, total: qty * CONFIG.addon.price, status:"confirmed", lodging:true, createdAt:now.toISOString(),
+    petFee:0, total: guest === "reciprocal" ? 0 : qty * CONFIG.addon.price, status:"confirmed", lodging:true, guest, createdAt:now.toISOString(),
     kit:{ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false } };
   btn.disabled = true; msg(out, "儲存中…", "ok");
   try{
@@ -2408,8 +2445,8 @@ async function addLodging(btn){
   }catch(e){ btn.disabled = false; return msg(out, "新增失敗：" + e.message, "err"); }
   btn.disabled = false;
   $("lgName").value = ""; $("lgPhone").value = ""; $("lgNote").value = ""; $("lgQty").value = "1";
-  msg(out, `✔ 已新增：${name}　${qty} ${CONFIG.addon.unit}`, "ok");
-  toast("住宿客套組已新增", "ok");
+  msg(out, `✔ 已新增（${guestName(b)}）：${name}　${qty} ${CONFIG.addon.unit}`, "ok");
+  toast(guestName(b) + "套組已新增", "ok");
   renderKit(); renderAdminList(); renderStats(); refreshBook();
 }
 function bindKit(){
@@ -3069,6 +3106,83 @@ function bindPurge(){
     });
   });
 }
+/* ========= 後台代客預約：日期不限、電話選填、不檢查名額 ========= */
+let paTotalTouched = false;
+function paRead(){
+  const n = id => Number($(id).value === "" ? NaN : $(id).value);
+  const extras = {}; document.querySelectorAll("#paExtras input").forEach(x => { const v = Number(x.value || 0); if(v > 0 || !Number.isFinite(v)) extras[x.dataset.id] = v; });
+  return { date:$("paDate").value, session:$("paSession").value, arrival:$("paArrival").value, adults:n("paAdults"), children:n("paChildren"), pets:n("paPets"),
+    cars:n("paCars"), addonQty:n("paAddon"), extras, name:$("paName").value.trim(), phone:$("paPhone").value.replace(/\D/g, ""), note:$("paNote").value.trim(), adminNote:$("paAdminNote").value.trim() };
+}
+function paCalc(e){
+  const num = v => Number.isFinite(v) && v > 0 ? v : 0;
+  const a = num(e.adults), c = num(e.children), pt = num(e.pets), q = num(e.addonQty);
+  const xt = extraItems().reduce((t, it) => t + num(e.extras[it.id]) * it.price, 0);
+  return a * CONFIG.adultPrice + c * CONFIG.childPrice + q * CONFIG.addon.price + xt + pt * (e.date && petFeeOn(e.date) ? CONFIG.petFee : 0) - addonDiscount(a, q);
+}
+function paFillArrival(){
+  const sid = $("paSession").value, cur = $("paArrival").value;
+  const opts = arrivalOptions(sid);
+  $("paArrival").innerHTML = `<option value="">（未定）</option>` + opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  $("paArrival").value = opts.includes(cur) ? cur : (opts[0] || "");
+}
+function paUpdate(){
+  const e = paRead(); if(!paTotalTouched) $("paTotal").value = paCalc(e);
+  const S = Store.settings(); let t = "試算金額 " + money(paCalc(e)) + "（可自行修改上方金額）";
+  if(e.date){
+    const info = dayInfo(e.date, S), ss = info.sessions.find(x => x.id === e.session);
+    t += ss && ss.state !== undefined && ss.rem !== undefined ? `；該場次目前剩餘名額 ${ss.rem} 位（超過也可新增）` : "；該日未開放或已過，仍可新增";
+  }
+  $("paInfo").textContent = t;
+}
+function openProxy(){
+  paTotalTouched = false;
+  $("paDate").value = todayStr();
+  $("paSession").innerHTML = SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
+  $("paSession").value = sessionById(ciSession || "") ? ciSession : SESSIONS[0].id;
+  paFillArrival();
+  ["paAdults","paChildren","paPets","paCars","paAddon"].forEach(id => $(id).value = id === "paAdults" ? 2 : 0);
+  $("paExtras").innerHTML = extraItems().map(it => `<div><label for="paEx_${it.id}">${esc(it.name)}（${esc(it.unit)}）</label><input id="paEx_${it.id}" data-id="${it.id}" type="number" min="0" value="0"></div>`).join("");
+  ["paName","paPhone","paNote","paAdminNote"].forEach(id => $(id).value = "");
+  msg($("paMsg"), "", ""); $("paSave").disabled = false; paUpdate();
+  $("proxyModal").classList.remove("hidden"); document.body.style.overflow = "hidden";
+}
+function closeProxy(){ $("proxyModal").classList.add("hidden"); document.body.style.overflow = ""; }
+async function saveProxy(){
+  const e = paRead(), out = $("paMsg");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(e.date)) return msg(out, "請選擇入園日期", "err");
+  if(!sessionById(e.session)) return msg(out, "請選擇場次", "err");
+  if(![e.adults, e.children, e.pets, e.cars, e.addonQty].every(v => Number.isInteger(v) && v >= 0 && v <= 99)) return msg(out, "人數、毛小孩、車輛與加購數量請輸入 0～99 的整數", "err");
+  if(Object.values(e.extras).some(v => !Number.isInteger(v) || v < 0 || v > 99)) return msg(out, "加租品項數量請輸入 0～99 的整數", "err");
+  if(e.adults + e.children < 1 && !(e.addonQty > 0)) return msg(out, "大人與孩童合計至少 1 位", "err");
+  if(!e.name) return msg(out, "請填寫姓名", "err");
+  if(e.phone && !/^09\d{8}$/.test(e.phone)) return msg(out, "手機請輸入 09 開頭共 10 碼，或留空", "err");
+  const total = Number($("paTotal").value);
+  if(!Number.isInteger(total) || total < 0) return msg(out, "預估金額請輸入 0 以上的整數", "err");
+  const now = new Date().toISOString(), rate = petFeeOn(e.date) ? CONFIG.petFee : 0;
+  const code = e.date.slice(5).replace("-", "") + (e.phone ? e.phone.slice(-5) : String(Math.floor(Math.random() * 100000)).padStart(5, "0"));
+  const b = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), code, date:e.date, session:e.session, arrival:e.arrival,
+    adults:e.adults, children:e.children, pets:e.pets, cars:e.cars, addonQty:e.addonQty, extras:e.extras, name:e.name, phone:e.phone, email:"", emailOpt:false,
+    note:e.note, adminNote:e.adminNote, petFee:e.pets * rate, total, status:"confirmed", byAdmin:true, createdAt:now,
+    history:[{ at:now, by:"後台代客預約", changes:[{ f:"建立", from:"", to:"後台代客預約" }] }] };
+  $("paSave").disabled = true; msg(out, "儲存中…", "ok");
+  try{
+    if(Store.remote){ await Store.createAdmin(b); await Store.load(); }
+    else { const list = Store.all(); list.push(b); Store.saveAll(list); }
+  }catch(err){ $("paSave").disabled = false; return msg(out, "新增失敗：" + err.message, "err"); }
+  closeProxy(); toast(`已新增代客預約（${e.date}・${e.name}）`, "ok");
+  renderAdminList(); renderKit(); renderStats(); renderCheckin(); refreshBook();
+}
+function bindProxy(){
+  $("paOpen").addEventListener("click", openProxy);
+  $("paClose").addEventListener("click", closeProxy);
+  $("paSave").addEventListener("click", saveProxy);
+  $("paSession").addEventListener("change", () => { paFillArrival(); paUpdate(); });
+  ["paDate","paAdults","paChildren","paPets","paAddon"].forEach(id => $(id).addEventListener("input", paUpdate));
+  $("paExtras").addEventListener("input", paUpdate);
+  $("paTotal").addEventListener("input", () => { paTotalTouched = true; });
+}
+
 function bindEdit(){
   $("adminList").addEventListener("click", e => { const b = e.target.closest("[data-edit]"); if(b) openEdit(b.dataset.edit); });
   $("edClose").addEventListener("click", closeEdit);
@@ -3237,7 +3351,7 @@ function exportStatsPdf(){
   $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　預約統計</h1>
     <div class="pr-sub">${esc(showDate(date))}　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
     <table><thead><tr><th>預約時段</th><th>預計入園</th><th>姓名</th><th class="n">人數</th><th class="n">毛小孩</th><th class="n">車數</th><th>電話</th><th class="n">${esc(CONFIG.addon.name)}（${esc(CONFIG.addon.unit)}）</th></tr></thead><tbody>${body}</tbody></table>`
-    + (lodgeSets ? `<div class="pr-sub" style="margin-top:8px">另有住宿客 ${lodgeSets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（未列入上表，不計入入園人數）</div>` : "");
+    + (lodgeSets ? `<div class="pr-sub" style="margin-top:8px">另有住宿客／互惠客 ${lodgeSets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（未列入上表，不計入入園人數）</div>` : "");
   const oldTitle = document.title; document.title = `預約統計-${date}`;
   const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
   window.addEventListener("afterprint", restore);
@@ -3315,11 +3429,11 @@ function renderTomorrowSets(){
   $("setsBox").innerHTML = `<div class="stat-total" style="text-align:center">
       <div style="font-size:14px">${esc(showDate(tom))}</div>
       <div style="font-size:42px;font-weight:800;line-height:1.2">${a.total} <span style="font-size:18px">${esc(unit)}</span></div>
-      <div>${per(a)}${a.lodging ? `　（含住宿客 ${a.lodging}）` : ""}</div>
+      <div>${per(a)}${a.lodging ? `　（含住宿／互惠客 ${a.lodging}）` : ""}</div>
       ${exLine(tom) ? `<div style="margin-top:6px;font-weight:700">${exLine(tom)}</div>` : ""}
       ${a.unpaid ? `<div style="color:#b3261e;margin-top:4px">⚠ ${a.unpaid} 筆訂單（${a.unpaidSets} ${esc(unit)}）訂金尚未確認</div>` : ""}
     </div>
-    <div class="hint" style="margin-top:8px">今日（${esc(showDate(tod))}）：${n.total} ${esc(unit)}　${per(n)}${n.lodging ? `（含住宿客 ${n.lodging}）` : ""}${exLine(tod) ? `　${exLine(tod)}` : ""}</div>`;
+    <div class="hint" style="margin-top:8px">今日（${esc(showDate(tod))}）：${n.total} ${esc(unit)}　${per(n)}${n.lodging ? `（含住宿／互惠客 ${n.lodging}）` : ""}${exLine(tod) ? `　${exLine(tod)}` : ""}</div>`;
 }
 
 // 「某場次 勾選＋人數上限」的小格子（每週設定與指定日期共用）
