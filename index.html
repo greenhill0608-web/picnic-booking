@@ -893,6 +893,7 @@
       <div><label for="edDate">入園日期</label><input id="edDate" type="date"></div>
       <div><label for="edSession">場次</label><select id="edSession"></select></div>
       <div><label for="edArrival">預計抵達</label><select id="edArrival"></select></div>
+      <div id="edGuestRow" class="hidden"><label for="edGuest">客人類別</label><select id="edGuest"><option value="lodging">🛏 住宿客</option><option value="reciprocal">🤝 互惠客</option></select></div>
       <div><label for="edStatus">狀態</label><select id="edStatus"><option value="confirmed">已確認</option><option value="cancelled">已取消</option></select></div>
       <div><label for="edAdults">大人</label><input id="edAdults" type="number" min="0"></div>
       <div><label for="edChildren">孩童</label><input id="edChildren" type="number" min="0"></div>
@@ -2271,7 +2272,8 @@ function readEdit(){
     adults:n("edAdults"), children:n("edChildren"), pets:n("edPets"), cars:n("edCars"), addonQty:n("edAddon"), total:n("edTotal"),
     extras:(() => { const o = {}; document.querySelectorAll("#edExtras input").forEach(x => { const v = Number(x.value || 0); if(v > 0 || !Number.isFinite(v)) o[x.dataset.id] = v; }); return o; })(),
     name:$("edName").value.trim(), phone:$("edPhone").value.trim(), email:$("edEmail").value.trim(),
-    note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim() };
+    note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim(),
+    ...($("edGuestRow").classList.contains("hidden") ? {} : { guest: $("edGuest").value === "reciprocal" ? "reciprocal" : "lodging" }) };
 }
 function editCalc(){
   const e = readEdit(); if([e.adults, e.children, e.pets, e.addonQty].some(x => !Number.isFinite(x))) return null;
@@ -2299,6 +2301,7 @@ function openEdit(id){
   $("edSession").innerHTML = SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
   $("edDate").value = b.date; $("edSession").value = sessionOf(b); fillEditArrival($("edSession").value, b.arrival);
   $("edStatus").value = b.status;
+  $("edGuestRow").classList.toggle("hidden", !b.lodging); $("edGuest").value = b.guest === "reciprocal" ? "reciprocal" : "lodging";
   $("edAdults").value = b.adults; $("edChildren").value = b.children; $("edPets").value = petsOf(b); $("edCars").value = carsOf(b);
   $("edAddon").value = b.addonQty || 0; $("edTotal").value = b.total || 0;
   $("edExtras").innerHTML = extraItems().map(it => `<div><label for="edEx_${it.id}">${esc(it.name)}（${esc(it.unit)}）</label><input id="edEx_${it.id}" data-id="${it.id}" type="number" min="0" value="${qtyOf(b, it.id)}"></div>`).join("");
@@ -2334,6 +2337,7 @@ async function saveEdit(){
     if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
   });
   extraItems().forEach(it => { const was = qtyOf(old, it.id), now = e.extras[it.id] || 0; if(was !== now) changes.push({ f:it.name, from:was, to:now }); });
+  if(old.lodging && (old.guest === "reciprocal" ? "reciprocal" : "lodging") !== e.guest) changes.push({ f:"客人類別", from:guestName(old), to:guestName(e) });
   const paidNow = $("edDepositPaid").checked;
   if(!!kitOf(old).depositPaid !== paidNow) changes.push({ f:"套組：已付訂金", from:kitOf(old).depositPaid ? "是" : "否", to:paidNow ? "是" : "否" });
   if(!changes.length) return msg(out, "沒有任何變更", "err");
@@ -3186,6 +3190,8 @@ function bindProxy(){
 function bindEdit(){
   $("adminList").addEventListener("click", e => { const b = e.target.closest("[data-edit]"); if(b) openEdit(b.dataset.edit); });
   $("edClose").addEventListener("click", closeEdit);
+  // 改成互惠客 → 預估金額帶 0；改回住宿客 → 帶回套組金額（仍可自行修改）
+  $("edGuest").addEventListener("change", () => { $("edTotal").value = $("edGuest").value === "reciprocal" ? 0 : (Number($("edAddon").value) || 0) * CONFIG.addon.price; });
   $("edSave").addEventListener("click", saveEdit);
   $("edSession").addEventListener("change", () => { fillEditArrival($("edSession").value, $("edArrival").value); updateEditCalc(); });
   ["edDate","edAdults","edChildren","edPets","edAddon"].forEach(id => $(id).addEventListener("input", updateEditCalc));
