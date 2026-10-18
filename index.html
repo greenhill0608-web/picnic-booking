@@ -2347,7 +2347,9 @@ function renderKit(){
     const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">🛏 住宿客</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
-      <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}${b.lodging && b.note ? `・${esc(b.note)}` : ""}</div>
+      <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}</div>
+      ${b.note ? `<div style="color:var(--muted);white-space:pre-wrap">客人備註：${esc(b.note)}</div>` : ""}
+      ${b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
       ${prepayHtml(b)}
       <div class="kit-ctl">
         ${!b.lodging && depositDue(b.addonQty) ? `<label class="inline"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金</span></label>` : ""}
