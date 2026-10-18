@@ -1396,6 +1396,33 @@ const Store = {
       await this.load(); return { ok:true };
     }catch(e){ return { ok:false, error:"儲存失敗：" + e.message }; }
   },
+  // 快速儲存（套組追蹤勾選用）：先更新畫面上的資料，再在背景依序存到伺服器；同一筆預約的存檔會排隊，不會亂序。
+  // 失敗時回報並重新讀取伺服器資料，讓畫面回到真實狀態。
+  updateFast(id, nb){
+    if(!this.remote) return this.updateBooking(id, nb);
+    const i = this._b.findIndex(x => x.id === id);
+    if(i < 0) return Promise.resolve({ ok:false, error:"找不到這筆預約" });
+    const prev = this._b[i];
+    this._b[i] = Object.assign({}, nb, { issue: prev.issue });
+    const run = async () => {
+      try{
+        if(this.api){ const bk = Object.assign({}, nb); delete bk.issue; await API.call("PUT", "/api/admin/booking/" + encodeURIComponent(id), { booking: bk }, true); }
+        else{
+          const clean = Object.assign({}, nb); delete clean.issue; delete clean.status;
+          const ses = sessionById(clean.session);
+          const body = { title: `[預約] ${clean.date} ${ses ? ses.label : clean.session} ${clean.code}`, body: "```json\n" + JSON.stringify(clean, null, 2) + "\n```" };
+          if(nb.status !== prev.status) body.state = nb.status === "cancelled" ? "closed" : "open";
+          if(body.state === "closed") body.state_reason = "not_planned";
+          await GH.api("/issues/" + prev.issue, { method:"PATCH", admin:true, body });
+        }
+        return { ok:true };
+      }catch(e){ return { ok:false, error:"儲存失敗：" + e.message }; }
+    };
+    this._q = this._q || {};
+    const p = (this._q[id] || Promise.resolve()).then(run);
+    this._q[id] = p;
+    return p;
+  },
   // 刪除多筆預約。遠端：優先用 GraphQL 永久刪除 Issue；權限不足時改為「封存」（關閉並改標題為 [封存]，預約不再計入）。
   async purge(list, onProgress){
     const res = { deleted:0, archived:0, failed:0, skipped:0 };
@@ -2419,10 +2446,13 @@ async function saveKit(id, field, raw, el){
   if(field === "depositReturned" && k.depositReturned && !(k.deposit > 0)){ toast("請先填寫押金金額", "err"); return renderKit(); }
   const now = new Date().toISOString();
   const nb = Object.assign({}, old, { kit:k, updatedAt:now, history:(Array.isArray(old.history) ? old.history : []).concat([{ at:now, by:"管理員", changes }]) });
-  const row = el && el.closest(".kit-row");
-  if(row) row.querySelectorAll("input").forEach(i => i.disabled = true);
-  const res = await Store.updateBooking(id, nb);
-  if(!res.ok) toast(res.error || "儲存失敗", "err"); else toast("已儲存", "ok");
+  // 先立刻更新畫面，不用等伺服器；存檔在背景進行，失敗才提醒並還原
+  const pending = Store.updateFast(id, nb);
+  renderKit(); renderAdminList();
+  const res = await pending;
+  if(res.ok){ toast("已儲存", "ok"); return; }
+  toast((res.error || "儲存失敗") + "，已還原為伺服器上的資料", "err");
+  try{ await Store.load(); }catch(e){}
   renderKit(); renderAdminList();
 }
 const guestName = b => b && b.guest === "reciprocal" ? "互惠客" : "住宿客";
