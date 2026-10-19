@@ -2418,7 +2418,9 @@ function renderKit(){
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
-  let list = f ? all.filter(b => b.date === f) : all;
+  // 預設只顯示今天以後的；日期已過的不顯示（例外：押金已收、還沒退的，仍會留著提醒）。自己選了某個日期就照那天顯示。
+  const tdy = todayStr();
+  let list = f ? all.filter(b => b.date === f) : all.filter(b => b.date >= tdy || (kitOf(b).deposit > 0 && !kitOf(b).depositReturned));
   const ss = $("kSession").value; if(ss) list = list.filter(b => b.lodging ? (!b.session || b.session === ss) : sessionOf(b) === ss);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
   if(flt === "unpaid") list = list.filter(b => !b.lodging && depositDue(b.addonQty || 0) > 0 && !kitOf(b).depositPaid);
