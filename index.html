@@ -101,6 +101,24 @@
   .kit-row .top{display:flex;justify-content:space-between;gap:8px;font-weight:600;flex-wrap:wrap}
   .kit-ctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:8px}
   .kit-ctl label.inline{margin:0}
+  /* 套組追蹤：簡化版卡片，勾選區做大 */
+  .kit-name{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;padding:2px 0;-webkit-tap-highlight-color:transparent}
+  .kit-name .nm{font-size:19px;font-weight:700;flex:1}
+  .kit-name .sets{font-weight:700;color:var(--green-d);white-space:nowrap}
+  .kit-name .chev{color:var(--green-d);transition:transform .15s}
+  .kit-name[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .kit-meta{color:var(--muted);font-size:14px;margin-top:2px}
+  .kit-detail{margin-top:8px;padding:8px 10px;border-radius:8px;background:#f6f9f5;border:1px dashed var(--line);font-size:15px}
+  .kit-detail > div{margin:3px 0}
+  .kit-big{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:10px}
+  .kit-tg{position:relative;display:block;margin:0;cursor:pointer}
+  .kit-tg input{position:absolute;opacity:0;width:100%;height:100%;left:0;top:0;margin:0;cursor:pointer}
+  .kit-tg span{display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px;padding:8px 10px;border:2px solid #b9c7bc;border-radius:12px;background:#fff;font-size:18px;font-weight:700;color:var(--ink);text-align:center;line-height:1.25;transition:background .1s}
+  .kit-tg span::before{content:"";width:24px;height:24px;border-radius:7px;border:2px solid #8fa496;background:#fff;flex:none}
+  .kit-tg input:checked + span{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
+  .kit-tg input:checked + span::before{content:"✓";display:flex;align-items:center;justify-content:center;background:#fff;border-color:#fff;color:#2f7d4f;font-size:18px}
+  .kit-tg input:disabled + span{opacity:.4;cursor:not-allowed}
+  .kit-tg input:focus-visible + span{outline:3px solid #1a73e8;outline-offset:2px}
   .kit-dep{display:flex;align-items:center;gap:6px}
   .kit-dep input[type=number]{width:96px;margin:0;padding:6px 8px}
   .adm-note{margin-top:4px;padding:6px 8px;background:#fff6dc;border-radius:8px;border:1px solid #ecd58a;font-size:13px;white-space:pre-wrap}
@@ -2382,6 +2400,8 @@ async function saveEdit(){
 // 資料存在每筆預約的 kit 欄位：{ checkedIn, pickedUp, deposit, depositReturned }
 const kitOf = b => Object.assign({ checkedIn:false, pickedUp:false, deposit:0, depositReturned:false, depositPaid:false }, b.kit || {});
 // 訂金（預約時，套組達一定組數需先匯款）狀態文字：kit-row／報到頁共用
+const KIT_DEPOSIT = 300;            // 套組押金固定金額（元）：勾「已收押金」就記 300，不用再輸入
+const kitOpenIds = new Set();       // 點開電話／付款資訊的卡片，重新畫面後仍保持展開
 function prepayHtml(b){
   const due = b.lodging ? 0 : depositDue(b.addonQty || 0); if(!due) return "";
   const paid = kitOf(b).depositPaid;
@@ -2410,17 +2430,22 @@ function renderKit(){
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
     const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
+    const open = kitOpenIds.has(b.id), dep = KIT_DEPOSIT, due = !b.lodging && depositDue(b.addonQty);
+    const when = `${esc(showDate(b.date))}　${b.lodging ? `${guestIcon(b)} ${guestName(b)}${ses && b.session ? "・" + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}`;
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
-      <div class="top"><span>${esc(showDate(b.date))} ${b.lodging ? `<span class="ci-badge" style="font-size:13px">${guestIcon(b)} ${guestName(b)}</span>${ses && b.session ? " " + esc(ses.label) : ""}` : `${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "—")}`}</span><span>${esc(CONFIG.addon.name)} ${b.addonQty} ${esc(CONFIG.addon.unit)}</span></div>
-      <div>${esc(b.name)}${b.phone ? `　<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : ""}${b.lodging ? "" : `・代號 ${esc(b.code)}`}</div>
-      ${b.note ? `<div style="color:var(--muted);white-space:pre-wrap">客人備註：${esc(b.note)}</div>` : ""}
+      <button type="button" class="kit-name" data-kit-toggle aria-expanded="${open}" title="點一下看電話與付款資訊"><span class="nm">${esc(b.name)}</span><span class="sets">${b.addonQty} ${esc(CONFIG.addon.unit)}</span><span class="chev">▾</span></button>
+      <div class="kit-meta">${when}</div>
+      <div class="kit-detail ${open ? "" : "hidden"}">
+        <div>📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒有留電話"}</div>
+        ${prepayHtml(b)}
+      </div>
+      ${b.note ? `<div style="color:var(--muted);white-space:pre-wrap;margin-top:6px">客人備註：${esc(b.note)}</div>` : ""}
       ${b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
-      ${prepayHtml(b)}
-      <div class="kit-ctl">
-        ${!b.lodging && depositDue(b.addonQty) ? `<label class="inline"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金</span></label>` : ""}
-        <label class="inline"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
-        <span class="kit-dep">押金 NT$ <input type="number" min="0" step="10" inputmode="numeric" data-kf="deposit" value="${k.deposit || ""}" placeholder="0"></span>
-        <label class="inline"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
+      <div class="kit-big">
+        ${due ? `<label class="kit-tg"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金</span></label>` : ""}
+        <label class="kit-tg"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
+        <label class="kit-tg"><input type="checkbox" data-kf="depositHeld" ${k.deposit > 0 ? "checked" : ""}><span>已收押金 $${k.deposit > 0 ? k.deposit : dep}</span></label>
+        <label class="kit-tg"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
       </div>
     </div>`;
   }).join("") : `<div class="hint">沒有符合的預約</div>`;
@@ -2428,7 +2453,9 @@ function renderKit(){
 async function saveKit(id, field, raw, el){
   const old = Store.all().find(x => x.id === id); if(!old) return;
   const cur = kitOf(old), k = Object.assign({}, cur);
-  if(field === "deposit"){
+  if(field === "depositHeld"){
+    k.deposit = raw ? (cur.deposit > 0 ? cur.deposit : KIT_DEPOSIT) : 0; if(!raw) k.depositReturned = false;
+  } else if(field === "deposit"){
     const v = raw === "" ? 0 : Number(raw);
     if(!Number.isInteger(v) || v < 0){ toast("押金請輸入 0 以上的整數", "err"); return renderKit(); }
     k.deposit = v; if(v === 0) k.depositReturned = false;
@@ -2492,6 +2519,12 @@ function bindKit(){
   $("lgDate").value = todayStr();
   $("lgAdd").addEventListener("click", e => addLodging(e.currentTarget));
   $("kitGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
+  $("kitList").addEventListener("click", e => {
+    const t = e.target.closest("[data-kit-toggle]"); if(!t) return;
+    const row = t.closest("[data-kit]"), id = row.dataset.kit, det = row.querySelector(".kit-detail");
+    const open = det.classList.toggle("hidden") === false;
+    t.setAttribute("aria-expanded", open); open ? kitOpenIds.add(id) : kitOpenIds.delete(id);
+  });
   $("kitList").addEventListener("change", e => {
     const el = e.target.closest("[data-kf]"), row = e.target.closest("[data-kit]"); if(!el || !row) return;
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
