@@ -539,6 +539,7 @@
           <button class="btn ghost small" id="fClear">顯示全部</button>
           <label class="inline" style="margin:0"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客／互惠客</span></label>
           <label class="inline" style="margin:0"><input type="checkbox" id="fHideCancel"><span>隱藏已取消</span></label>
+          <label class="inline" style="margin:0"><input type="checkbox" id="fShowPast"><span>顯示過去的預約</span></label>
           <button class="btn small" id="paOpen" style="background:#d98a1f" title="替客人在後台直接新增預約：日期不限、當天也可以、電話可不填">＋ 代客預約</button>
           <button class="btn small" id="csvBtn" title="匯出目前清單顯示的內容（依日期與隱藏條件）">匯出 CSV</button>
         </div>
@@ -2100,6 +2101,7 @@ function bind(){
   });
   $("logoutBtn").addEventListener("click", () => { forgetAdmin(); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
+  $("fShowPast").addEventListener("change", renderAdminList);       // 不記住：每次重新開啟都預設不顯示過去的預約
   [["fHideLodge","picnic_hide_lodge"],["fHideCancel","picnic_hide_cancel"]].forEach(([id,k]) => {
     try{ $(id).checked = localStorage.getItem(k) === "1"; }catch(e){}
     $(id).addEventListener("change", () => { try{ localStorage.setItem(k, $(id).checked ? "1" : "0"); }catch(e){} renderAdminList(); });
@@ -3473,10 +3475,11 @@ function saveAnnounce(){
   msg($("anMsg"), Store.remote ? "已儲存，正在寫入" + BACKEND + "…（完成後會顯示提示）" : "已儲存", "ok");
 }
 
-// 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消）；匯出 CSV 也用同一份
+// 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消、過去的預約）；匯出 CSV 也用同一份
+// 預設不顯示今天以前的預約，勾「顯示過去的預約」才會出現；自己選了某個日期就照那天顯示（過去的也可以）
 function adminFiltered(){
-  const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked;
-  return Store.all().filter(b => (!f || b.date === f) && !(hl && b.lodging) && !(hc && b.status !== "confirmed"));
+  const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked, sp = $("fShowPast").checked, t = todayStr();
+  return Store.all().filter(b => (!f || b.date === f) && (f || sp || b.date >= t) && !(hl && b.lodging) && !(hc && b.status !== "confirmed"));
 }
 function renderAdminList(){
   const f = $("fDate").value;
@@ -3489,7 +3492,9 @@ function renderAdminList(){
     : mode === "dateDesc" ? (a, b) => -byDate(a, b)
     : byDate);
   const ok = list.filter(b => b.status === "confirmed");
+  const hiddenPast = (f || $("fShowPast").checked) ? 0 : Store.all().filter(b => b.date < todayStr()).length;
   $("fStat").textContent = `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
+    + (hiddenPast ? `；已隱藏過去的預約 ${hiddenPast} 筆（勾「顯示過去的預約」可看）` : "")
     + (f ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
   $("adminList").innerHTML = list.length ? list.map(b => bookingCard(b, true)).join("") : `<div class="hint">沒有預約資料</div>`;
   renderDeposits();
