@@ -400,6 +400,7 @@
 
       <h2 class="sec">注意事項</h2>
       <div class="notice" id="noticeBox"></div>
+      <label class="inline hidden" id="kidsAckRow" style="background:#fff3d6;border:1px solid #e8cf55;border-radius:10px;padding:10px"><input type="checkbox" id="kidsAck"><span id="kidsAckText"></span></label>
       <label class="inline"><input type="checkbox" id="agree"><span><b>我已詳閱上述注意事項</b></span></label>
 
       <div class="price" id="priceBox"></div>
@@ -733,6 +734,9 @@
         <textarea id="ctPetRule" rows="2"></textarea>
         <label for="ctPetDayRule">毛小孩野餐日的規定（取代上面那段，選擇毛小孩隻數時顯示）</label>
         <textarea id="ctPetDayRule" rows="2"></textarea>
+        <label for="ctPetDayMinAge">毛小孩野餐日：不開放幾歲以下小孩入場（0 = 不限制）</label>
+        <input id="ctPetDayMinAge" type="number" min="0" max="18" inputmode="numeric">
+        <div class="hint" style="margin:2px 0 0">客人在毛小孩野餐日預約且有孩童時，必須勾選「同行孩童皆已滿 N 歲」才能送出（網站與伺服器都會檢查）。後台代客預約不受限制。</div>
         <label for="ctPetDayNote">毛小孩野餐日的提醒（提醒一般客人，選日期與預約完成時顯示）</label>
         <textarea id="ctPetDayNote" rows="3"></textarea>
         <label for="ctFooter">頁尾文字（留空＝不顯示）</label><input id="ctFooter" type="text">
@@ -863,6 +867,7 @@
     </div>
     <label for="cuEmail">電子信箱（選填）</label><input id="cuEmail" type="email" autocomplete="email">
     <label class="inline"><input type="checkbox" id="cuEmailOpt"><span>寄送預約變更通知到這個信箱</span></label>
+    <label class="inline hidden" id="cuKidsRow" style="background:#fff3d6;border:1px solid #e8cf55;border-radius:10px;padding:10px"><input type="checkbox" id="cuKids"><span id="cuKidsText"></span></label>
     <label for="cuNote">備註</label><input id="cuNote" type="text" maxlength="100">
     <div class="price" id="cuPrice" style="margin-top:12px"></div>
     <div id="cuMsg"></div>
@@ -1024,6 +1029,7 @@ const CONFIG = {
   petRule: "戶外草原野餐區需繫繩，以不干擾其他訪客為前提，並請清理排泄物",
   petDayRule: "本日為毛小孩野餐日：毛小孩不強制繫繩，可在園區自由活動，請主人隨時留意並清理排泄物",
   petDayNote: "本日為毛小孩野餐日，園區內會有較多毛小孩自由活動；若您或同行者害怕動物、對毛髮過敏，請斟酌是否預約。",
+  petDayMinAge: 10,                         // 毛小孩野餐日：為確保安全，不開放幾歲以下小孩入場（0 = 不限制）；後台「網站內容」可改
 
   announce: { on:true, title:"活動公告", auto:true, lines:[] },   // 預約頁最上方的公告；後台「活動公告」可編輯
   infoLines: [],                            // 其他說明（營業場次、預約期間、入園費會自動產生）；後台「網站內容」可編輯
@@ -1044,9 +1050,9 @@ const SESSIONS = CONFIG.sessions;
 const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
   childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
-  announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
+  announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, petDayMinAge: CONFIG.petDayMinAge, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
   addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","infoLines","infoFull","notices","footer","announce"];
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   const D = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
@@ -1519,6 +1525,9 @@ const money = n => "NT$ " + Number(n || 0).toLocaleString("en-US");
 const sessionById = id => SESSIONS.find(x => x.id === id);
 const msg = (el, text, type) => { el.innerHTML = text ? `<div class="msg ${type}">${esc(text)}</div>` : ""; };
 const isPetDay = s => !!s && !isNoPetDay(s) && Store.petDays().includes(s);
+// 毛小孩日安全規則：不開放 N 歲以下小孩入場
+const petDayKidsRule = () => { const n = Number(CONFIG.petDayMinAge); return n > 0 ? `為確保安全，本日不開放 ${n} 歲以下小孩入場。` : ""; };
+const kidsAckNeeded = (date, children) => !!date && isPetDay(date) && Number(CONFIG.petDayMinAge) > 0 && children > 0;
 const isNoPetDay = s => CONFIG.noPetDates.includes(s) || Store.noPets().includes(s);
 const todayStr = () => fmt(new Date());
 const toMin = t => { const [h, m] = t.split(":").map(Number); return h*60 + m; };
@@ -1856,7 +1865,7 @@ function renderDateInfo(){
     .map(x => `${x.label}${x.state === "ok" ? "剩 " + x.rem + " 位" : "額滿"}`).join("、");
   if(isNoPetDay(date)) t += "。⚠️ 當天不開放寵物入園";
   msg(out, t, isNoPetDay(date) ? "info" : "ok");
-  if(isPetDay(date)) out.innerHTML += `<div class="msg info petday">🐾 <b>毛小孩野餐日</b>　${esc(CONFIG.petDayNote)}</div>`;
+  if(isPetDay(date)) out.innerHTML += `<div class="msg info petday">🐾 <b>毛小孩野餐日</b>　${esc(CONFIG.petDayNote)}${petDayKidsRule() ? `<br><b>⚠️ ${esc(petDayKidsRule())}</b>` : ""}</div>`;
 }
 
 function renderSessions(){
@@ -1937,7 +1946,14 @@ function calc(){
   };
 }
 
+function renderKidsAck(){
+  const need = kidsAckNeeded($("date").value, calc().c), row = $("kidsAckRow");
+  row.classList.toggle("hidden", !need);
+  if(need){ const n = Number(CONFIG.petDayMinAge); $("kidsAckText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${n} 歲以下小孩入場。</b>我確認同行的孩童皆已滿 ${n} 歲。`; }
+  else $("kidsAck").checked = false;
+}
 function renderPrice(){
+  renderKidsAck();
   const p = calc();
   const people = p.a + p.c;
   $("peopleHint").textContent = `共 ${people} 位`;
@@ -2194,6 +2210,7 @@ function submitBooking(){
   if(!Number.isInteger(pets) || pets < 0 || pets > CONFIG.maxPets) return msg(out, `毛小孩隻數請選 0～${CONFIG.maxPets} 隻`, "err");
   if(pets > 0 && isNoPetDay(date)) return msg(out, "當天不開放寵物入園", "err");
   if(!Number.isInteger(cars) || cars < 0 || cars > CONFIG.maxCars) return msg(out, `車輛數請選 0～${CONFIG.maxCars} 輛`, "err");
+  if(kidsAckNeeded(date, p.c) && !$("kidsAck").checked){ $("kidsAck").focus(); return msg(out, `毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`, "err"); }
   if(!$("agree").checked) return msg(out, "請先勾選「我已詳閱上述注意事項」", "err");
   for(const it of allItems()){
     const q = it.id === "set" ? p.q : (p.x[it.id] || 0); if(!q) continue;
@@ -2206,7 +2223,7 @@ function submitBooking(){
     code: date.slice(5).replace("-", "") + phone.slice(-5),      // 例：10/20 + 手機末 5 碼 → 102070045
     date, session: sid, arrival,
     adults: p.a, children: p.c, addonQty: p.q, extras: p.x,
-    pets, cars,
+    pets, cars, ...(kidsAckNeeded(date, p.c) ? { kidsOk: true } : {}),
     name, phone, email, emailOpt: !!email && $("emailOpt").checked, note,
     petFee: p.petTotal, total: p.total, credit: p.credit, discount: p.discount,
     status: "confirmed",
@@ -2228,7 +2245,7 @@ function submitBooking(){
     <div class="line total"><span>預估總金額</span><span>${money(p.total)}</span></div>
     <div class="credit">費用皆為現場收取</div>`;
   $("doneDeposit").innerHTML = depositHtml(p.q);
-  $("donePetDay").innerHTML = isPetDay(date) ? `🐾 <b>毛小孩野餐日</b>　${esc(CONFIG.petDayNote)}` : "";
+  $("donePetDay").innerHTML = isPetDay(date) ? `🐾 <b>毛小孩野餐日</b>　${esc(CONFIG.petDayNote)}${petDayKidsRule() ? `<br><b>⚠️ ${esc(petDayKidsRule())}</b>` : ""}` : "";
   $("donePetDay").classList.toggle("hidden", !isPetDay(date));
   $("doneMail").textContent = (booking.emailOpt && Store.remote) ? `✉️ 預約成功通知將寄到 ${email}（可能需要幾分鐘，請一併檢查垃圾郵件匣）` : "";
   $("doneMail").classList.toggle("hidden", !$("doneMail").textContent);
@@ -2417,10 +2434,10 @@ function renderKit(){
   renderDeposits(); renderTomorrowSets();
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
-  const held = all.reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
-  // 預設只顯示今天以後的；日期已過的不顯示（例外：押金已收、還沒退的，仍會留著提醒）。自己選了某個日期就照那天顯示。
+  const held = all.filter(b => b.date >= todayStr()).reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
+  // 預設只顯示今天以後的；日期已過的一律不顯示（不論押金是否已退）。自己選了某個日期就照那天顯示。
   const tdy = todayStr();
-  let list = f ? all.filter(b => b.date === f) : all.filter(b => b.date >= tdy || (kitOf(b).deposit > 0 && !kitOf(b).depositReturned));
+  let list = f ? all.filter(b => b.date === f) : all.filter(b => b.date >= tdy);
   const ss = $("kSession").value; if(ss) list = list.filter(b => b.lodging ? (!b.session || b.session === ss) : sessionOf(b) === ss);
   if(flt === "notPicked") list = list.filter(b => !kitOf(b).pickedUp);
   if(flt === "unpaid") list = list.filter(b => !b.lodging && depositDue(b.addonQty || 0) > 0 && !kitOf(b).depositPaid);
@@ -2428,7 +2445,7 @@ function renderKit(){
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
   const paidSum = list.reduce((n, b) => n + (!b.lodging && kitOf(b).depositPaid ? depositDue(b.addonQty || 0) : 0), 0);
-  $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；全部預約目前尚未退還的押金合計 ${money(held)}` + (paidSum ? `；已收訂金合計 ${money(paidSum)}（結帳需扣除）` : "");
+  $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；今天以後尚未退還的押金合計 ${money(held)}` + (paidSum ? `；已收訂金合計 ${money(paidSum)}（結帳需扣除）` : "");
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
     const done = k.pickedUp && (!(k.deposit > 0) || k.depositReturned);
@@ -2699,7 +2716,7 @@ function cuRead(){
   return { date:$("cuDate").value, session:$("cuSession").value, arrival:$("cuArrival").value, cars:n("cuCars"),
     adults:n("cuAdults"), children:n("cuChildren"), pets:n("cuPets"), addonQty:n("cuAddon"),
     extras:(() => { const o = {}; document.querySelectorAll("#cuExtras select").forEach(x => { if(+x.value > 0) o[x.dataset.id] = +x.value; }); return o; })(),
-    email:$("cuEmail").value.trim(), note:$("cuNote").value.trim() };
+    email:$("cuEmail").value.trim(), note:$("cuNote").value.trim(), ...($("cuKidsRow").classList.contains("hidden") ? {} : { kidsOk: $("cuKids").checked }) };
 }
 function cuPrice(e){
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0, disc = addonDiscount(e.adults, e.addonQty);
@@ -2724,6 +2741,8 @@ function cuRender(){
   const sid = $("cuSession").value, cur = $("cuArrival").value;
   const opts = arrivalOptions(sid); $("cuArrival").innerHTML = opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
   $("cuArrival").value = opts.includes(cur) ? cur : (opts.includes(b.arrival) && sid === sessionOf(b) ? b.arrival : (opts[0] || ""));
+  { const need = kidsAckNeeded(e.date, e.children), row = $("cuKidsRow"); row.classList.toggle("hidden", !need);
+    if(need) $("cuKidsText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場。</b>我確認同行的孩童皆已滿 ${CONFIG.petDayMinAge} 歲。`; else $("cuKids").checked = false; }
   const e2 = cuRead(), pr = cuPrice(e2);
   $("cuPrice").innerHTML = `
     <div class="line"><span>大人 ${e2.adults} × ${CONFIG.adultPrice}</span><span>${money(e2.adults * CONFIG.adultPrice)}</span></div>
@@ -2758,7 +2777,7 @@ function openCustomerEdit(id){
   $("cuSession").innerHTML = `<option value="${esc(sessionOf(b))}"></option>`; $("cuSession").value = sessionOf(b);
   $("cuArrival").innerHTML = `<option value="${esc(b.arrival)}"></option>`; $("cuArrival").value = b.arrival;
   $("cuEmail").value = b.email || ""; $("cuEmailOpt").checked = !!b.emailOpt; $("cuNote").value = b.note || "";
-  msg($("cuMsg"), "", "");
+  msg($("cuMsg"), "", ""); $("cuKids").checked = !!b.kidsOk;
   cuRender(); $("cuEmailOpt").checked = !!b.emailOpt && !$("cuEmailOpt").disabled;
   $("cuModal").classList.remove("hidden"); document.body.style.overflow = "hidden";
 }
@@ -2771,6 +2790,7 @@ async function saveCustomerEdit(){
   if(old.date <= todayStr()) return fail("當天或已過的預約無法線上修改，請來電");
   if(e.adults + e.children < 1) return fail("大人與孩童合計至少 1 位");
   if(e.pets > 0 && isNoPetDay(e.date)) return fail("當天不開放寵物入園");
+  if(kidsAckNeeded(e.date, e.children) && !e.kidsOk) return fail(`毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`);
   if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return fail("電子信箱格式不正確（可留空）");
   const sameSlot = e.date === old.date && e.session === sessionOf(old);
   if(!sameSlot || e.adults + e.children !== old.adults + old.children){
@@ -3278,7 +3298,7 @@ function renderContent(){
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
-   v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote);
+   v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote); v("ctPetDayMinAge", CONFIG.petDayMinAge);
   v("ctFooter", CONFIG.footer || ""); v("ctSiteName", CONFIG.siteName);
   $("ctSessions").innerHTML = SESSIONS.map(x => `
     <div class="scell" data-sid="${esc(x.id)}" style="margin-bottom:8px">
@@ -3308,7 +3328,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
     sessions:{}
@@ -3326,6 +3346,7 @@ function saveContent(){
   if(c.addon.image && !/^https?:\/\//i.test(c.addon.image)) return msg(out, "照片網址需以 http:// 或 https:// 開頭（或留空）", "err");
   if(!int(c.petFee, 0, 10000)) return msg(out, "毛小孩費用請輸入 0 以上的整數", "err");
   if(c.petFee > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(c.petFeeFrom)) return msg(out, "請選擇毛小孩開始收費的日期", "err");
+  if(!int(c.petDayMinAge, 0, 18)) return msg(out, "毛小孩野餐日的年齡限制請輸入 0～18（0 = 不限制）", "err");
   if(!int(c.maxPets, 0, 20) || !int(c.maxCars, 0, 20)) return msg(out, "毛小孩與車輛上限請輸入 0～20", "err");
   if(!c.siteName) return msg(out, "請填寫網站名稱", "err");
   let bad = "";
