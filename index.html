@@ -408,6 +408,15 @@
       <button class="btn" id="submitBtn">送出預約</button>
     </div>
 
+    <div class="modal-overlay hidden" id="kidsAlert" role="alertdialog" aria-modal="true" aria-labelledby="kidsAlertTitle" style="z-index:60;align-items:center">
+      <div class="edit-box" style="text-align:center;max-width:420px;padding:24px 18px">
+        <div style="font-size:48px;line-height:1">⚠️</div>
+        <h2 id="kidsAlertTitle" style="margin:8px 0 6px;color:#b3412f">毛小孩野餐日</h2>
+        <div id="kidsAlertText" style="font-size:22px;font-weight:800;line-height:1.5;margin:6px 0"></div>
+        <div style="color:var(--muted);margin:8px 0 16px">請務必確認同行的孩童皆已滿規定年齡，謝謝您的配合。</div>
+        <button class="btn" id="kidsAlertOk" style="font-size:18px;min-height:52px">我知道了</button>
+      </div>
+    </div>
     <div class="done-overlay hidden" id="bookDone" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
       <div class="done-box" id="doneBox">
         <div class="done-panel">
@@ -735,7 +744,7 @@
         <textarea id="ctPetRule" rows="2"></textarea>
         <label for="ctPetDayRule">毛小孩野餐日的規定（取代上面那段，選擇毛小孩隻數時顯示）</label>
         <textarea id="ctPetDayRule" rows="2"></textarea>
-        <label for="ctPetDayMinAge">毛小孩野餐日：不開放幾歲以下小孩入場（0 = 不限制）</label>
+        <label for="ctPetDayMinAge">毛小孩野餐日：不開放幾歲以下小孩入園（0 = 不限制）</label>
         <input id="ctPetDayMinAge" type="number" min="0" max="18" inputmode="numeric">
         <div class="hint" style="margin:2px 0 0">客人在毛小孩野餐日預約且有孩童時，必須勾選「同行孩童皆已滿 N 歲」才能送出（網站與伺服器都會檢查）。後台代客預約不受限制。</div>
         <label for="ctPetDayNote">毛小孩野餐日的提醒（提醒一般客人，選日期與預約完成時顯示）</label>
@@ -1030,7 +1039,7 @@ const CONFIG = {
   petRule: "戶外草原野餐區需繫繩，以不干擾其他訪客為前提，並請清理排泄物",
   petDayRule: "本日為毛小孩野餐日：毛小孩不強制繫繩，可在園區自由活動，請主人隨時留意並清理排泄物",
   petDayNote: "本日為毛小孩野餐日，園區內會有較多毛小孩自由活動；若您或同行者害怕動物、對毛髮過敏，請斟酌是否預約。",
-  petDayMinAge: 10,                         // 毛小孩野餐日：為確保安全，不開放幾歲以下小孩入場（0 = 不限制）；後台「網站內容」可改
+  petDayMinAge: 10,                         // 毛小孩野餐日：為確保安全，不開放幾歲以下小孩入園（0 = 不限制）；後台「網站內容」可改
 
   announce: { on:true, title:"活動公告", auto:true, lines:[] },   // 預約頁最上方的公告；後台「活動公告」可編輯
   infoLines: [],                            // 其他說明（營業場次、預約期間、入園費會自動產生）；後台「網站內容」可編輯
@@ -1526,8 +1535,8 @@ const money = n => "NT$ " + Number(n || 0).toLocaleString("en-US");
 const sessionById = id => SESSIONS.find(x => x.id === id);
 const msg = (el, text, type) => { el.innerHTML = text ? `<div class="msg ${type}">${esc(text)}</div>` : ""; };
 const isPetDay = s => !!s && !isNoPetDay(s) && Store.petDays().includes(s);
-// 毛小孩日安全規則：不開放 N 歲以下小孩入場
-const petDayKidsRule = () => { const n = Number(CONFIG.petDayMinAge); return n > 0 ? `為確保安全，本日不開放 ${n} 歲以下小孩入場。` : ""; };
+// 毛小孩日安全規則：不開放 N 歲以下小孩入園
+const petDayKidsRule = () => { const n = Number(CONFIG.petDayMinAge); return n > 0 ? `為確保安全，本日不開放 ${n} 歲以下小孩入園。` : ""; };
 const kidsAckNeeded = (date, children) => !!date && isPetDay(date) && Number(CONFIG.petDayMinAge) > 0 && children > 0;
 const isNoPetDay = s => CONFIG.noPetDates.includes(s) || Store.noPets().includes(s);
 const todayStr = () => fmt(new Date());
@@ -1950,7 +1959,7 @@ function calc(){
 function renderKidsAck(){
   const need = kidsAckNeeded($("date").value, calc().c), row = $("kidsAckRow");
   row.classList.toggle("hidden", !need);
-  if(need){ const n = Number(CONFIG.petDayMinAge); $("kidsAckText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${n} 歲以下小孩入場。</b>我確認同行的孩童皆已滿 ${n} 歲。`; }
+  if(need){ const n = Number(CONFIG.petDayMinAge); $("kidsAckText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${n} 歲以下小孩入園。</b>我確認同行的孩童皆已滿 ${n} 歲。`; }
   else $("kidsAck").checked = false;
 }
 function renderPrice(){
@@ -2027,6 +2036,7 @@ function bind(){
     $("emailOpt").disabled = !good; if(!good) $("emailOpt").checked = false;
   });
   $("submitBtn").addEventListener("click", submitBooking);
+  $("kidsAlertOk").addEventListener("click", () => $("kidsAlert").classList.add("hidden"));
   $("againBtn").addEventListener("click", () => {
     $("bookDone").classList.add("hidden"); $("bookForm").classList.remove("hidden"); document.body.style.overflow = "";
     $("agree").checked = false; refreshBook();
@@ -2212,7 +2222,7 @@ function submitBooking(){
   if(!Number.isInteger(pets) || pets < 0 || pets > CONFIG.maxPets) return msg(out, `毛小孩隻數請選 0～${CONFIG.maxPets} 隻`, "err");
   if(pets > 0 && isNoPetDay(date)) return msg(out, "當天不開放寵物入園", "err");
   if(!Number.isInteger(cars) || cars < 0 || cars > CONFIG.maxCars) return msg(out, `車輛數請選 0～${CONFIG.maxCars} 輛`, "err");
-  if(kidsAckNeeded(date, p.c) && !$("kidsAck").checked){ $("kidsAck").focus(); return msg(out, `毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`, "err"); }
+  if(kidsAckNeeded(date, p.c) && !$("kidsAck").checked){ $("kidsAck").focus(); return msg(out, `毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`, "err"); }
   if(!$("agree").checked) return msg(out, "請先勾選「我已詳閱上述注意事項」", "err");
   for(const it of allItems()){
     const q = it.id === "set" ? p.q : (p.x[it.id] || 0); if(!q) continue;
@@ -2256,6 +2266,10 @@ function submitBooking(){
   document.body.style.overflow = "hidden"; $("bookDone").scrollTop = 0;
   $("name").value = ""; $("note").value = "";
   window.scrollTo({ top:0 });
+  if(isPetDay(date) && Number(CONFIG.petDayMinAge) > 0){          // 毛小孩日：送出後再特別跳出提醒
+    $("kidsAlertText").textContent = `本日不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園`;
+    $("kidsAlert").classList.remove("hidden");
+  }
   };
   if(Store.remote){ $("submitBtn").disabled = true; msg(out, "送出中，請稍候…", "ok"); Store.addRemote(booking).then(finish); }
   else finish(Store.add(booking));
@@ -2744,7 +2758,7 @@ function cuRender(){
   const opts = arrivalOptions(sid); $("cuArrival").innerHTML = opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
   $("cuArrival").value = opts.includes(cur) ? cur : (opts.includes(b.arrival) && sid === sessionOf(b) ? b.arrival : (opts[0] || ""));
   { const need = kidsAckNeeded(e.date, e.children), row = $("cuKidsRow"); row.classList.toggle("hidden", !need);
-    if(need) $("cuKidsText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場。</b>我確認同行的孩童皆已滿 ${CONFIG.petDayMinAge} 歲。`; else $("cuKids").checked = false; }
+    if(need) $("cuKidsText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園。</b>我確認同行的孩童皆已滿 ${CONFIG.petDayMinAge} 歲。`; else $("cuKids").checked = false; }
   const e2 = cuRead(), pr = cuPrice(e2);
   $("cuPrice").innerHTML = `
     <div class="line"><span>大人 ${e2.adults} × ${CONFIG.adultPrice}</span><span>${money(e2.adults * CONFIG.adultPrice)}</span></div>
@@ -2792,7 +2806,7 @@ async function saveCustomerEdit(){
   if(old.date <= todayStr()) return fail("當天或已過的預約無法線上修改，請來電");
   if(e.adults + e.children < 1) return fail("大人與孩童合計至少 1 位");
   if(e.pets > 0 && isNoPetDay(e.date)) return fail("當天不開放寵物入園");
-  if(kidsAckNeeded(e.date, e.children) && !e.kidsOk) return fail(`毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入場，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`);
+  if(kidsAckNeeded(e.date, e.children) && !e.kidsOk) return fail(`毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`);
   if(e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) return fail("電子信箱格式不正確（可留空）");
   const sameSlot = e.date === old.date && e.session === sessionOf(old);
   if(!sameSlot || e.adults + e.children !== old.adults + old.children){
