@@ -482,7 +482,7 @@
 
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-F</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-G</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2310,11 +2310,23 @@ function submitBooking(){
 
 /* ========= 預約卡片 / 查詢 ========= */
 // 「接收 LINE 預約通知」：客人點按鈕 → 開啟官方 LINE 並帶出「綁定預約 XXXXXXXX」，按送出後系統自動回覆預約成功
+function lineBindUrl(token){
+  const id = String((CONFIG.addon && CONFIG.addon.lineId) || "").trim();
+  if(!token || !/^@?[\w.-]{3,40}$/.test(id)) return "";
+  return "https://line.me/R/oaMessage/" + encodeURIComponent(id.startsWith("@") ? id : "@" + id) + "/?" + encodeURIComponent("綁定預約 " + token + "\n👆 請按「送出」完成綁定");
+}
+// 後台：用店主手機的簡訊 App 傳「一鍵綁定 LINE」連結給還沒綁定的客人
+function smsBindHref(b){
+  const url = lineBindUrl(b.lineToken); const ph = String(b.phone || "").replace(/[^\d+]/g, "");
+  if(!url || ph.length < 8) return "";
+  const body = `${b.name} 您好，這是南窩綠丘野餐預約（${showDate(b.date)}，代號 ${b.code}）。點下方連結開啟 LINE，再按「送出」，即可收到預約成功與提醒通知：\n${url}`;
+  return "sms:" + ph + "?&body=" + encodeURIComponent(body);
+}
 function lineBindHtml(token, bound){
   const id = String((CONFIG.addon && CONFIG.addon.lineId) || "").trim();
   if(!token || !/^@?[\w.-]{3,40}$/.test(id)) return "";
   if(bound) return "✅ 已綁定 LINE 通知，預約有變更或取消也會通知您。";
-  const url = "https://line.me/R/oaMessage/" + encodeURIComponent(id.startsWith("@") ? id : "@" + id) + "/?" + encodeURIComponent("綁定預約 " + token + "\n👆 請按「送出」完成綁定");
+  const url = lineBindUrl(token);
   return `💬 想用 <b>LINE</b> 收到預約成功通知嗎？<br>按下方按鈕加入官方 LINE，訊息已幫您填好。<br><b style="color:#b00020">⚠️ 進入 LINE 後，請務必按右下角的「送出」，才算綁定完成。</b>`
     + `<a class="line-bind" href="${esc(url)}" target="_blank" rel="noopener">接收 LINE 預約通知</a>`;
 }
@@ -2339,6 +2351,7 @@ function bookingCard(b, admin){
     ${!admin && !cancelled && upcoming && lineBindHtml(b.lineToken, b.lineBound || !!b.lineUserId) ? `<div class="done-line">${lineBindHtml(b.lineToken, b.lineBound || !!b.lineUserId)}</div>` : ""}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       ${needAck ? `<button class="btn small" data-ack="${esc(b.id)}" style="background:#e0a030;min-height:44px;font-size:16px">✔ 確認</button>` : ""}
+      ${admin && !b.lineUserId && !cancelled && upcoming && smsBindHref(b) ? `<a class="btn small" href="${esc(smsBindHref(b))}" style="background:#1e88e5;text-decoration:none;display:inline-flex;align-items:center">📱 傳簡訊邀請綁定 LINE</a>` : ""}
       ${admin && b.lineUserId && !cancelled ? `<button class="btn small" data-line="${esc(b.id)}" style="background:#06c755">💬 傳 LINE</button>` : ""}
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
       ${!admin && !cancelled && b.date > todayStr() && !b.lodging ? `<button class="btn small" data-cedit="${esc(b.id)}">修改預約</button>` : ""}
