@@ -483,7 +483,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-I</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-K</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2317,10 +2317,18 @@ function lineBindUrl(token){
   return "https://line.me/R/oaMessage/" + encodeURIComponent(id.startsWith("@") ? id : "@" + id) + "/?" + encodeURIComponent("綁定預約 " + token + "\n👆 請按「送出」完成綁定");
 }
 // 後台：用店主手機的簡訊 App 傳「一鍵綁定 LINE」連結給還沒綁定的客人
+// 簡訊字數：含中文時 1 則最多 70 字（超過每則 67 字）；純英數 1 則最多 160 字。依連結長度自動挑「放得進 1 則」的最長文字
+function smsBindText(link){
+  const zh = ["南窩綠丘預約通知：點連結開LINE，按「送出」\n", "南窩綠丘LINE通知：點連結按「送出」\n", "南窩綠丘：點連結開LINE按送出\n", "LINE通知：點連結按送出\n"];
+  for(const t of zh) if(t.length + link.length <= 70) return t + link;
+  return "GREENHILL LINE notice: tap the link, then press Send.\n" + link;   // 連結太長時改純英文（160 字內仍是 1 則）
+}
 function smsBindHref(b){
-  const url = lineBindUrl(b.lineToken); const ph = String(b.phone || "").replace(/[^\d+]/g, "");
-  if(!url || ph.length < 8) return "";
-  const body = `${b.name} 您好，這是南窩綠丘野餐預約（${showDate(b.date)}，代號 ${b.code}）。點下方連結開啟 LINE，再按「送出」，即可收到預約成功與提醒通知：\n${url}`;
+  const ph = String(b.phone || "").replace(/[^\d+]/g, "");
+  if(!lineBindUrl(b.lineToken) || ph.length < 8) return "";
+  // 簡訊要省字數：用 Worker 的短連結（/l/代碼）；沒有後端時才退回長連結
+  const link = Store.remote ? CONFIG.apiUrl.replace(/\/+$/, "") + "/l/" + b.lineToken : lineBindUrl(b.lineToken);
+  const body = smsBindText(link);
   // iPhone 用「&body=」，Android 用「?body=」；兩種寫法互相不通用
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
   return "sms:" + ph + (ios ? "&body=" : "?body=") + encodeURIComponent(body);
