@@ -166,6 +166,8 @@
   .ack-card{border:2px solid #e0a030;background:#fff8e6}
   .ack-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid #ecd9a8}
   .ack-btn{min-width:84px;min-height:48px;font-size:18px}
+  .line-bind{display:block;text-align:center;background:#06c755;color:#fff!important;font-weight:800;font-size:18px;padding:14px 12px;border-radius:12px;text-decoration:none;margin-top:6px}
+  .done-line{margin:10px 0;padding:10px;border:2px solid #06c755;border-radius:12px;background:#f0fff5;font-size:15px;line-height:1.5}
   .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
   /* 整理版面：自訂順序與顏色（只存在這支瀏覽器）*/
   .lay-ctl{display:none}
@@ -433,6 +435,7 @@
           <div id="doneDeposit"></div>
           <div class="msg info petday hidden" id="donePetDay"></div>
           <div class="done-mail hidden" id="doneMail"></div>
+          <div class="done-line hidden" id="doneLine"></div>
           <div class="done-shot">📸 請<b>截圖留存</b>此畫面作為憑證<br><span>入園時請出示；查詢或取消需要手機號碼與代號</span></div>
           <button class="btn" id="againBtn">我已截圖，關閉</button>
         </div>
@@ -721,6 +724,7 @@
           <div><label for="ctHolder">戶名</label><input id="ctHolder" type="text"></div>
         </div>
         <label for="ctLineUrl">官方 LINE 連結</label><input id="ctLineUrl" type="text" placeholder="https://lin.ee/…">
+        <label for="ctLineId">官方 LINE ID（用於「接收 LINE 預約通知」按鈕）</label><input id="ctLineId" type="text" placeholder="例：@123abcde（含 @）；留空 = 不顯示按鈕">
         <label for="ctAddImage">照片網址（留空＝使用內建照片）</label><input id="ctAddImage" type="text" placeholder="https://…">
         <label for="ctAddDesc">套組內容說明（顯示在預約頁加購欄位上方）</label><input id="ctAddDesc" type="text" placeholder="例如：含借用野餐桌＆野餐墊">
         <label for="ctAddNote">照片下方說明</label><input id="ctAddNote" type="text">
@@ -1034,6 +1038,7 @@ const CONFIG = {
     depositFrom: 3, depositPerSet: 500,       // 套組達 3 組（含）以上需先付訂金，每組 500 元
     bankText: "土地銀行（代碼 005）通霄分行", account: "084-005-164-787", holder: "張秀雅",
     lineUrl: "https://lin.ee/P4WnwmDH",
+    lineId: "",                                // 官方 LINE ID（@xxxx）；後台「內容設定」可填。填了預約成功畫面才會出現「接收 LINE 預約通知」
     adultDiscount: 50, discountPerSet: 2,     // 加購套組時：每位大人折抵 50 元，每個套組最多折抵 2 位大人
     desc: "套組內容：含借用野餐桌＆野餐墊（當日現場領取，離園時歸還）",   // 預約頁加購欄位上方的說明；留空 = 不顯示
     image: "",                                // 留空 = 使用內嵌在本檔的照片；也可填圖片網址／檔名改用外部圖片
@@ -1342,7 +1347,7 @@ const Store = {
   // GitHub 版：先重新讀取名額 → 建立 Issue → 再核對先後順序，超額的那一筆自動取消
   async addRemote(b){
     if(this.api){
-      try{ await API.call("POST", "/api/book", b); await this.load(); return { ok:true }; }
+      try{ const j = await API.call("POST", "/api/book", b); await this.load(); return { ok:true, booking:j.booking }; }
       catch(e){ try{ await this.load(); }catch(x){} return { ok:false, error:e.message }; }
     }
     try{
@@ -2268,6 +2273,8 @@ function submitBooking(){
   $("donePetDay").classList.toggle("hidden", !isPetDay(date));
   $("doneMail").textContent = (booking.emailOpt && Store.remote) ? `✉️ 預約成功通知將寄到 ${email}（可能需要幾分鐘，請一併檢查垃圾郵件匣）` : "";
   $("doneMail").classList.toggle("hidden", !$("doneMail").textContent);
+  const lb = lineBindHtml(r.booking && r.booking.lineToken, r.booking && r.booking.lineBound);
+  $("doneLine").innerHTML = lb; $("doneLine").classList.toggle("hidden", !lb);
   $("bookForm").classList.add("hidden");
   $("bookDone").classList.remove("hidden");
   document.body.style.overflow = "hidden"; $("bookDone").scrollTop = 0;
@@ -2283,6 +2290,15 @@ function submitBooking(){
 }
 
 /* ========= 預約卡片 / 查詢 ========= */
+// 「接收 LINE 預約通知」：客人點按鈕 → 開啟官方 LINE 並帶出「綁定預約 XXXXXXXX」，按送出後系統自動回覆預約成功
+function lineBindHtml(token, bound){
+  const id = String((CONFIG.addon && CONFIG.addon.lineId) || "").trim();
+  if(!token || !/^@?[\w.-]{3,40}$/.test(id)) return "";
+  if(bound) return "✅ 已綁定 LINE 通知，預約有變更或取消也會通知您。";
+  const url = "https://line.me/R/oaMessage/" + encodeURIComponent(id.startsWith("@") ? id : "@" + id) + "/?" + encodeURIComponent("綁定預約 " + token);
+  return `💬 想用 <b>LINE</b> 收到預約成功通知嗎？<br>按下方按鈕加入官方 LINE，訊息已幫您填好，直接按「送出」即可。`
+    + `<a class="line-bind" href="${esc(url)}" target="_blank" rel="noopener">接收 LINE 預約通知</a>`;
+}
 function bookingCard(b, admin){
   const cancelled = b.status === "cancelled";
   const upcoming = b.date >= todayStr();
@@ -2301,6 +2317,7 @@ function bookingCard(b, admin){
     ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
     ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
     ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
+    ${!admin && !cancelled && upcoming && lineBindHtml(b.lineToken, b.lineBound) ? `<div class="done-line">${lineBindHtml(b.lineToken, b.lineBound)}</div>` : ""}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       ${needAck ? `<button class="btn small" data-ack="${esc(b.id)}" style="background:#e0a030;min-height:44px;font-size:16px">✔ 確認</button>` : ""}
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
@@ -3320,7 +3337,7 @@ function renderContent(){
   const A = CONFIG.addon, v = (id, x) => { $(id).value = x; };
   v("ctAdultPrice", CONFIG.adultPrice); v("ctAdultCredit", CONFIG.adultCredit); v("ctChildPrice", CONFIG.childPrice);
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
-  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || "");
+  v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || ""); v("ctLineId", A.lineId || "");
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
    v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote); v("ctPetDayMinAge", CONFIG.petDayMinAge);
@@ -3355,7 +3372,7 @@ function saveContent(){
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
     petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
-      depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl") },
+      depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl"), lineId:t("ctLineId") },
     sessions:{}
   };
   if(![c.adultPrice, c.adultCredit, c.childPrice].every(x => int(x, 0, 100000))) return msg(out, "票價與抵用金請輸入 0 以上的整數", "err");
@@ -3366,6 +3383,7 @@ function saveContent(){
   if(!int(c.addon.adultDiscount, 0, 100000) || !int(c.addon.discountPerSet, 0, 10)) return msg(out, "套組折抵請輸入 0 以上的整數（每個套組最多折抵 0～10 位）", "err");
   if(!int(c.addon.depositFrom, 0, 20) || !int(c.addon.depositPerSet, 0, 100000)) return msg(out, "訂金請輸入整數（幾組以上 0～20、每組金額 0 以上）", "err");
   if(c.addon.depositFrom > 0 && c.addon.depositPerSet > 0 && (!c.addon.bankText || !c.addon.account || !c.addon.holder)) return msg(out, "有收訂金時，請填寫銀行／分行、帳號與戶名", "err");
+  if(c.addon.lineId && !/^@?[\w.-]{3,40}$/.test(c.addon.lineId)) return msg(out, "官方 LINE ID 格式不正確（例：@123abcde）", "err");
   if(c.addon.lineUrl && !/^https:\/\//i.test(c.addon.lineUrl)) return msg(out, "LINE 連結需以 https:// 開頭（或留空）", "err");
   if(!int(c.addon.max, 1, 20)) return msg(out, "加購數量上限請輸入 1～20", "err");
   if(c.addon.image && !/^https?:\/\//i.test(c.addon.image)) return msg(out, "照片網址需以 http:// 或 https:// 開頭（或留空）", "err");
