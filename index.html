@@ -354,6 +354,7 @@
           <select id="children"></select>
         </div>
       </div>
+      <div class="hint" id="adultMaxHint"></div>
       <div class="hint" id="peopleHint"></div>
       <label for="pets" id="petLabel" style="margin-top:12px"></label>
       <select id="pets"></select>
@@ -1759,12 +1760,14 @@ function initAddonPhoto(){
 
 // 單筆人數沒有上限（只受該場次剩餘名額限制）；下拉選單最多列到 MAXP
 const MAXP = 99;
+const MAX_ADULTS = 15;     // 客人線上預約：單筆大人最多 15 位，超過請改用官方 LINE
 function refreshPeople(defA, defC){
-  const max = MAXP;
   let a = defA !== undefined ? defA : (+$("adults").value || 1), c = defC !== undefined ? defC : (+$("children").value || 0);
-  a = Math.min(Math.max(a, 1), max); c = Math.min(Math.max(c, 0), max - a);
-  fillSelect($("adults"), 1, max - c, a, n => `${n} 位`);
-  fillSelect($("children"), 0, max - a, c, n => `${n} 位`);
+  a = Math.min(Math.max(a, 1), MAX_ADULTS); c = Math.min(Math.max(c, 0), MAXP - a);
+  fillSelect($("adults"), 1, MAX_ADULTS, a, n => `${n} 位`);
+  fillSelect($("children"), 0, MAXP - a, c, n => `${n} 位`);
+  const u = (CONFIG.addon && CONFIG.addon.lineUrl) || "";
+  $("adultMaxHint").innerHTML = `單筆大人最多 ${MAX_ADULTS} 位；超過 ${MAX_ADULTS} 位請` + (/^https:\/\//.test(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener">加入官方 LINE 訊息預約</a>` : "加入官方 LINE 訊息預約");
 }
 function fillSelect(sel, from, to, def, label){
   sel.innerHTML = "";
