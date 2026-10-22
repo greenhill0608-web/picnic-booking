@@ -163,6 +163,9 @@
   details.card.fold:not([open]) > summary::after{transform:rotate(-90deg)}
   details.card.fold > summary h2{margin:0}
   details.card.fold[open] > summary{margin-bottom:12px}
+  .ack-card{border:2px solid #e0a030;background:#fff8e6}
+  .ack-row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid #ecd9a8}
+  .ack-btn{min-width:84px;min-height:48px;font-size:18px}
   .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
   /* 整理版面：自訂順序與顏色（只存在這支瀏覽器）*/
   .lay-ctl{display:none}
@@ -475,6 +478,7 @@
     </div>
 
     <div id="adminPanel" class="hidden">
+      <div id="ackBox" class="hidden"></div>
       <div class="fold-bar"><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
@@ -3390,12 +3394,37 @@ function openAdmin(){
   if(!Store.remote || !GH.adminToken()) return renderAdmin();
   return Store.load().then(renderAdmin).catch(e => { toast("無法讀取" + BACKEND + "：" + e.message, "err"); renderAdmin(); });
 }
+/* ========= 新預約確認：客人線上新預約要按「確認」，超過 8 小時沒確認會再寄 email 提醒 ========= */
+const pendingAck = () => Store.all().filter(b => b.needAck && !b.ackAt && b.status === "confirmed").sort((x, y) => String(x.createdAt).localeCompare(String(y.createdAt)));
+function renderAck(){
+  const box = $("ackBox"); if(!box) return;
+  const L = pendingAck();
+  box.classList.toggle("hidden", !L.length);
+  if(!L.length){ box.innerHTML = ""; return; }
+  const ago = t => { const m = Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 60000)); return m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.floor(m / 60)} 小時前` : `${Math.floor(m / 1440)} 天前`; };
+  box.innerHTML = `<div class="card ack-card"><h2>🔔 有 ${L.length} 筆新預約等你確認</h2>`
+    + `<div class="hint" style="margin:0 0 8px">按「確認」代表你已經看到。超過 8 小時沒確認，系統會再寄 email 提醒你。</div>`
+    + L.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="ack-row"><div class="ack-info"><b>${esc(b.name)}</b>　${esc(showDate(b.date))} ${esc(ses ? ses.label : "")}<br>`
+      + `大人 ${b.adults}・孩童 ${b.children}${petsOf(b) ? `・毛小孩 ${petsOf(b)}` : ""}${b.addonQty ? `・套組 ${b.addonQty}` : ""}　<span style="color:var(--muted)">${esc(ago(b.createdAt))}送出</span></div>`
+      + `<button class="btn ack-btn" data-ack="${esc(b.id)}">確認</button></div>`; }).join("")
+    + (L.length > 1 ? `<button class="btn ghost" id="ackAll" style="margin-top:8px">全部確認（${L.length} 筆）</button>` : "")
+    + `</div>`;
+}
+async function ackBookings(ids){
+  const at = new Date().toISOString();
+  for(const id of ids){ const b = Store.all().find(x => x.id === id); if(b && !b.ackAt) await Store.updateFast(id, Object.assign({}, b, { ackAt: at })); }
+  renderAck();
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-ack]"); if(t){ t.disabled = true; ackBookings([t.dataset.ack]); return; }
+  if(e.target.id === "ackAll"){ e.target.disabled = true; ackBookings(pendingAck().map(b => b.id)); }
+});
 function renderAdmin(){
   const logged = isAdminLogged();
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); renderTraffic(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAck(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); renderTraffic(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
