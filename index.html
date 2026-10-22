@@ -414,17 +414,6 @@
       <button class="btn" id="submitBtn">送出預約</button>
     </div>
 
-    <div class="modal-overlay hidden" id="lineModal" role="dialog" aria-modal="true" aria-labelledby="lineModalTitle">
-      <div class="edit-box" style="max-width:460px">
-        <h2 id="lineModalTitle" style="margin-top:0">💬 傳 LINE 給客人</h2>
-        <div class="hint" id="lineModalSub" style="margin:0 0 8px"></div>
-        <div id="lineModalLog" class="hint" style="margin:0 0 8px"></div>
-        <textarea id="lineModalText" rows="5" maxlength="1000" placeholder="輸入要傳給客人的訊息…" style="width:100%"></textarea>
-        <div class="hint">客人會在官方 LINE 收到這則訊息；客人回覆的內容會出現在 LINE 官方帳號後台的聊天室，不會出現在這個網站。每則計入官方帳號每月訊息則數。</div>
-        <div class="msg" id="lineModalMsg"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="lineModalSend">傳送</button><button class="btn ghost" id="lineModalClose">關閉</button></div>
-      </div>
-    </div>
     <div class="modal-overlay hidden" id="kidsAlert" role="alertdialog" aria-modal="true" aria-labelledby="kidsAlertTitle" style="z-index:60;align-items:center">
       <div class="edit-box" style="text-align:center;max-width:420px;padding:24px 18px">
         <div style="font-size:48px;line-height:1">⚠️</div>
@@ -938,6 +927,17 @@
     </div>
   </div>
 </div>
+<div class="modal-overlay hidden" id="lineModal" role="dialog" aria-modal="true" aria-labelledby="lineModalTitle">
+      <div class="edit-box" style="max-width:460px">
+        <h2 id="lineModalTitle" style="margin-top:0">💬 傳 LINE 給客人</h2>
+        <div class="hint" id="lineModalSub" style="margin:0 0 8px"></div>
+        <div id="lineModalLog" class="hint" style="margin:0 0 8px"></div>
+        <textarea id="lineModalText" rows="5" maxlength="1000" placeholder="輸入要傳給客人的訊息…" style="width:100%"></textarea>
+        <div class="hint">客人會在官方 LINE 收到這則訊息；客人回覆的內容會出現在 LINE 官方帳號後台的聊天室，不會出現在這個網站。每則計入官方帳號每月訊息則數。</div>
+        <div class="msg" id="lineModalMsg"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="lineModalSend">傳送</button><button class="btn ghost" id="lineModalClose">關閉</button></div>
+      </div>
+    </div>
 <div class="modal-overlay hidden" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
   <div class="edit-box">
     <h2 id="editTitle">編輯預約</h2>
