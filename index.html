@@ -2288,9 +2288,10 @@ function bookingCard(b, admin){
   const upcoming = b.date >= todayStr();
   const ses = sessionById(sessionOf(b));
   const hist = Array.isArray(b.history) ? b.history : [];
+  const needAck = admin && !cancelled && b.needAck && !b.ackAt;       // 新預約還沒按「確認」
   return `
-  <div class="booking ${cancelled?"cancelled":""}">
-    <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled?"已取消":"已確認"}</span></div>
+  <div class="booking ${cancelled?"cancelled":""}"${needAck ? ' style="border-left-color:#e0a030;background:#fff8e6"' : ""}>
+    <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled ? "已取消" : needAck ? '<b style="color:#b36b00">🔔 待你確認</b>' : "已確認"}</span></div>
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
     ${b.lodging ? `<div><b>${guestIcon(b)} ${guestName(b)}（僅套組追蹤，不計入入園人數）</b></div>` : ""}
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
@@ -2301,6 +2302,7 @@ function bookingCard(b, admin){
     ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
     ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+      ${needAck ? `<button class="btn small" data-ack="${esc(b.id)}" style="background:#e0a030;min-height:44px;font-size:16px">✔ 確認</button>` : ""}
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
       ${!admin && !cancelled && b.date > todayStr() && !b.lodging ? `<button class="btn small" data-cedit="${esc(b.id)}">修改預約</button>` : ""}
       ${!cancelled && upcoming ? `<button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button>` : ""}
@@ -3413,7 +3415,7 @@ function renderAck(){
 async function ackBookings(ids){
   const at = new Date().toISOString();
   for(const id of ids){ const b = Store.all().find(x => x.id === id); if(b && !b.ackAt) await Store.updateFast(id, Object.assign({}, b, { ackAt: at })); }
-  renderAck();
+  renderAck(); renderAdminList();
 }
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-ack]"); if(t){ t.disabled = true; ackBookings([t.dataset.ack]); return; }
