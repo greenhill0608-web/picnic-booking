@@ -482,7 +482,8 @@
 
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-G</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div id="smsBox" class="hidden"></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-H</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -3450,8 +3451,25 @@ function openAdmin(){
   return Store.load().then(renderAdmin).catch(e => { toast("無法讀取" + BACKEND + "：" + e.message, "err"); renderAdmin(); });
 }
 /* ========= 新預約確認：客人線上新預約要按「確認」，超過 8 小時沒確認會再寄 email 提醒 ========= */
+/* 尚未綁定 LINE 的未來預約：一次列出，逐筆用手機簡訊邀請綁定（已傳過的記在這支手機的瀏覽器） */
+const smsSentGet = () => { try { return JSON.parse(localStorage.getItem("ghSmsSent") || "{}"); } catch(e){ return {}; } };
+const smsSentSet = id => { try { const o = smsSentGet(); o[id] = Date.now(); localStorage.setItem("ghSmsSent", JSON.stringify(o)); } catch(e){} };
+function renderSmsBox(){
+  const box = $("smsBox"); if(!box) return;
+  const t = todayStr(), sent = smsSentGet();
+  const L = Store.all().filter(b => b.status === "confirmed" && !b.lodging && b.date >= t && !b.lineUserId && smsBindHref(b)).sort((x, y) => x.date.localeCompare(y.date));
+  box.classList.toggle("hidden", !L.length);
+  if(!L.length){ box.innerHTML = ""; return; }
+  const todo = L.filter(b => !sent[b.id]).length;
+  box.innerHTML = `<details class="card"><summary style="cursor:pointer;font-weight:700">📱 尚未綁定 LINE 的預約（${L.length} 筆，還沒傳簡訊 ${todo} 筆）</summary>`
+    + `<div class="hint" style="margin:8px 0">請用手機開後台。按「傳簡訊」會打開簡訊 App，內容已填好，確認後送出即可。</div>`
+    + L.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="ack-row"><div class="ack-info"><b>${esc(b.name)}</b>　${esc(b.phone)}<br>${esc(showDate(b.date))} ${esc(ses ? ses.label : "")}${sent[b.id] ? ' <span style="color:#06c755">✔ 已按過傳簡訊</span>' : ""}</div>`
+      + `<a class="btn ack-btn" data-sms="${esc(b.id)}" href="${esc(smsBindHref(b))}" style="background:#1e88e5;text-decoration:none;display:inline-flex;align-items:center">傳簡訊</a></div>`; }).join("")
+    + `</details>`;
+}
 const pendingAck = () => Store.all().filter(b => b.needAck && !b.ackAt && b.status === "confirmed").sort((x, y) => String(x.createdAt).localeCompare(String(y.createdAt)));
 function renderAck(){
+  renderSmsBox();
   const box = $("ackBox"); if(!box) return;
   const L = pendingAck();
   box.classList.toggle("hidden", !L.length);
@@ -3499,6 +3517,7 @@ document.addEventListener("click", e => {
   if(e.target.id === "lineModalClose"){ $("lineModal").classList.add("hidden"); return; }
   if(e.target.id === "lineModalSend"){ sendLineModal(); return; }
   const t = e.target.closest("[data-ack]"); if(t){ t.disabled = true; ackBookings([t.dataset.ack]); return; }
+  { const sa = e.target.closest && e.target.closest("[data-sms]"); if(sa){ smsSentSet(sa.dataset.sms); setTimeout(renderSmsBox, 500); } }
   if(e.target.id === "ackAll"){ e.target.disabled = true; ackBookings(pendingAck().map(b => b.id)); }
 });
 function renderAdmin(){
