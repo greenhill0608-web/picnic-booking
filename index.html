@@ -414,6 +414,17 @@
       <button class="btn" id="submitBtn">送出預約</button>
     </div>
 
+    <div class="modal-overlay hidden" id="lineModal" role="dialog" aria-modal="true" aria-labelledby="lineModalTitle">
+      <div class="edit-box" style="max-width:460px">
+        <h2 id="lineModalTitle" style="margin-top:0">💬 傳 LINE 給客人</h2>
+        <div class="hint" id="lineModalSub" style="margin:0 0 8px"></div>
+        <div id="lineModalLog" class="hint" style="margin:0 0 8px"></div>
+        <textarea id="lineModalText" rows="5" maxlength="1000" placeholder="輸入要傳給客人的訊息…" style="width:100%"></textarea>
+        <div class="hint">客人會在官方 LINE 收到這則訊息；客人回覆的內容會出現在 LINE 官方帳號後台的聊天室，不會出現在這個網站。每則計入官方帳號每月訊息則數。</div>
+        <div class="msg" id="lineModalMsg"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn" id="lineModalSend">傳送</button><button class="btn ghost" id="lineModalClose">關閉</button></div>
+      </div>
+    </div>
     <div class="modal-overlay hidden" id="kidsAlert" role="alertdialog" aria-modal="true" aria-labelledby="kidsAlertTitle" style="z-index:60;align-items:center">
       <div class="edit-box" style="text-align:center;max-width:420px;padding:24px 18px">
         <div style="font-size:48px;line-height:1">⚠️</div>
@@ -2317,9 +2328,10 @@ function bookingCard(b, admin){
     ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
     ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
     ${admin && hist.length ? `<div class="hint" style="margin:4px 0 0">✏️ 已修改 ${hist.length} 次（最後：${esc(fmtTime(hist[hist.length-1].at))}）</div>` : ""}
-    ${!admin && !cancelled && upcoming && lineBindHtml(b.lineToken, b.lineBound) ? `<div class="done-line">${lineBindHtml(b.lineToken, b.lineBound)}</div>` : ""}
+    ${!admin && !cancelled && upcoming && lineBindHtml(b.lineToken, b.lineBound || !!b.lineUserId) ? `<div class="done-line">${lineBindHtml(b.lineToken, b.lineBound || !!b.lineUserId)}</div>` : ""}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       ${needAck ? `<button class="btn small" data-ack="${esc(b.id)}" style="background:#e0a030;min-height:44px;font-size:16px">✔ 確認</button>` : ""}
+      ${admin && b.lineUserId && !cancelled ? `<button class="btn small" data-line="${esc(b.id)}" style="background:#06c755">💬 傳 LINE</button>` : ""}
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
       ${!admin && !cancelled && b.date > todayStr() && !b.lodging ? `<button class="btn small" data-cedit="${esc(b.id)}">修改預約</button>` : ""}
       ${!cancelled && upcoming ? `<button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button>` : ""}
@@ -3435,7 +3447,32 @@ async function ackBookings(ids){
   for(const id of ids){ const b = Store.all().find(x => x.id === id); if(b && !b.ackAt) await Store.updateFast(id, Object.assign({}, b, { ackAt: at })); }
   renderAck(); renderAdminList();
 }
+let lineModalId = "";
+function openLineModal(id){
+  const b = Store.all().find(x => x.id === id); if(!b) return;
+  lineModalId = id;
+  $("lineModalSub").textContent = `${b.name}　${showDate(b.date)}　代號 ${b.code}`;
+  const lg = Array.isArray(b.lineLog) ? b.lineLog : [];
+  $("lineModalLog").innerHTML = lg.length ? "已傳過：" + lg.slice(-3).map(m => `<br>・${esc(fmtTime(m.at))}　${esc(m.text.slice(0, 40))}${m.text.length > 40 ? "…" : ""}`).join("") : "";
+  $("lineModalText").value = ""; msg($("lineModalMsg"), "", "");
+  $("lineModal").classList.remove("hidden"); $("lineModalText").focus();
+}
+async function sendLineModal(){
+  const text = $("lineModalText").value.trim(), out = $("lineModalMsg");
+  if(!text) return msg(out, "請輸入訊息", "err");
+  $("lineModalSend").disabled = true; msg(out, "傳送中…", "ok");
+  try{
+    const j = await API.call("POST", "/api/admin/line-send", { id: lineModalId, text }, true);
+    const b = Store.all().find(x => x.id === lineModalId); if(b) b.lineLog = j.log;
+    msg(out, "已傳送 ✔", "ok"); $("lineModalText").value = "";
+    setTimeout(() => $("lineModal").classList.add("hidden"), 900);
+  }catch(e){ msg(out, e.message, "err"); }
+  $("lineModalSend").disabled = false;
+}
 document.addEventListener("click", e => {
+  const lt = e.target.closest("[data-line]"); if(lt){ openLineModal(lt.dataset.line); return; }
+  if(e.target.id === "lineModalClose"){ $("lineModal").classList.add("hidden"); return; }
+  if(e.target.id === "lineModalSend"){ sendLineModal(); return; }
   const t = e.target.closest("[data-ack]"); if(t){ t.disabled = true; ackBookings([t.dataset.ack]); return; }
   if(e.target.id === "ackAll"){ e.target.disabled = true; ackBookings(pendingAck().map(b => b.id)); }
 });
