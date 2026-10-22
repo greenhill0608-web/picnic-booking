@@ -482,7 +482,7 @@
 
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-C</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-D</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -724,6 +724,14 @@
           <div><label for="ctHolder">戶名</label><input id="ctHolder" type="text"></div>
         </div>
         <label for="ctLineUrl">官方 LINE 連結</label><input id="ctLineUrl" type="text" placeholder="https://lin.ee/…">
+        <div style="margin-top:12px;padding:10px;border:1px solid #06c755;border-radius:10px;background:#f0fff5">
+          <b>💬 前一天自動提醒（LINE）</b>
+          <label class="inline" style="margin:6px 0"><input type="checkbox" id="ctLineRemOn"><span>每天早上 9:00，自動傳給「明天要來」且已綁定 LINE 的客人</span></label>
+          <label for="ctLineRemText" style="margin-top:6px">提醒內容（留空 = 使用預設範本）</label>
+          <textarea id="ctLineRemText" rows="9" maxlength="1500" style="width:100%" placeholder="留空就使用預設範本"></textarea>
+          <div class="hint">可用的代換字（會自動換成每位客人的資料）：{姓名} {日期} {星期} {場次} {抵達} {人數} {金額} {代號} {電話}（店家電話）、{訂金提醒}（套組訂金還沒收到才會出現）、{毛小孩提醒}（當天是毛小孩日才會出現）。每則計入官方帳號每月訊息則數。</div>
+          <button type="button" class="btn ghost small" id="ctLineRemDef">載入預設範本</button>
+        </div>
         <label for="ctLineId">官方 LINE ID（用於「接收 LINE 預約通知」按鈕）</label><input id="ctLineId" type="text" placeholder="例：@123abcde（含 @）；留空 = 不顯示按鈕">
         <label for="ctAddImage">照片網址（留空＝使用內建照片）</label><input id="ctAddImage" type="text" placeholder="https://…">
         <label for="ctAddDesc">套組內容說明（顯示在預約頁加購欄位上方）</label><input id="ctAddDesc" type="text" placeholder="例如：含借用野餐桌＆野餐墊">
@@ -1082,8 +1090,8 @@ const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
   childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
   announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, petDayMinAge: CONFIG.petDayMinAge, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
-  addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce"];
+  lineRemind: { on:true, text:"" }, addon: CONFIG.addon, sessions: CONFIG.sessions }));
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce","lineRemind"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   const D = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
@@ -3350,6 +3358,7 @@ function renderContent(){
   v("ctAdultPrice", CONFIG.adultPrice); v("ctAdultCredit", CONFIG.adultCredit); v("ctChildPrice", CONFIG.childPrice);
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || ""); v("ctLineId", A.lineId || "");
+  { const lr = CONFIG.lineRemind || {}; $("ctLineRemOn").checked = lr.on !== false; v("ctLineRemText", lr.text || ""); }
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
    v("ctNotices", CONFIG.notices.join("\n")); v("ctPetRule", CONFIG.petRule); v("ctPetDayRule", CONFIG.petDayRule); v("ctPetDayNote", CONFIG.petDayNote); v("ctPetDayMinAge", CONFIG.petDayMinAge);
@@ -3382,7 +3391,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), lineRemind:{ on:$("ctLineRemOn").checked, text:t("ctLineRemText") }, announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl"), lineId:t("ctLineId") },
     sessions:{}
@@ -3401,6 +3410,7 @@ function saveContent(){
   if(c.addon.image && !/^https?:\/\//i.test(c.addon.image)) return msg(out, "照片網址需以 http:// 或 https:// 開頭（或留空）", "err");
   if(!int(c.petFee, 0, 10000)) return msg(out, "毛小孩費用請輸入 0 以上的整數", "err");
   if(c.petFee > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(c.petFeeFrom)) return msg(out, "請選擇毛小孩開始收費的日期", "err");
+  if(c.lineRemind.text.length > 1500) return msg(out, "LINE 提醒內容最多 1500 字", "err");
   if(!int(c.petDayMinAge, 0, 18)) return msg(out, "毛小孩野餐日的年齡限制請輸入 0～18（0 = 不限制）", "err");
   if(!int(c.maxPets, 0, 20) || !int(c.maxCars, 0, 20)) return msg(out, "毛小孩與車輛上限請輸入 0～20", "err");
   if(!c.siteName) return msg(out, "請填寫網站名稱", "err");
@@ -3469,7 +3479,9 @@ async function sendLineModal(){
   }catch(e){ msg(out, e.message, "err"); }
   $("lineModalSend").disabled = false;
 }
+const DEFAULT_LINE_REMIND = "{姓名} 您好，提醒您明天（{日期}・週{星期}）有一筆野餐預約：\n\n場次：{場次}\n預計抵達：{抵達}\n人數：{人數}\n預估金額：NT$ {金額}（費用皆為現場收取）\n預約代號：{代號}{訂金提醒}{毛小孩提醒}\n\n預約當天將無法線上修改，如需變更請來電 {電話}。期待您的光臨！";
 document.addEventListener("click", e => {
+  if(e.target.id === "ctLineRemDef"){ $("ctLineRemText").value = DEFAULT_LINE_REMIND.replace(/\\n/g, "\n"); return; }
   const lt = e.target.closest("[data-line]"); if(lt){ openLineModal(lt.dataset.line); return; }
   if(e.target.id === "lineModalClose"){ $("lineModal").classList.add("hidden"); return; }
   if(e.target.id === "lineModalSend"){ sendLineModal(); return; }
