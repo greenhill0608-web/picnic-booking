@@ -483,7 +483,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-H</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-I</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2321,7 +2321,9 @@ function smsBindHref(b){
   const url = lineBindUrl(b.lineToken); const ph = String(b.phone || "").replace(/[^\d+]/g, "");
   if(!url || ph.length < 8) return "";
   const body = `${b.name} 您好，這是南窩綠丘野餐預約（${showDate(b.date)}，代號 ${b.code}）。點下方連結開啟 LINE，再按「送出」，即可收到預約成功與提醒通知：\n${url}`;
-  return "sms:" + ph + "?&body=" + encodeURIComponent(body);
+  // iPhone 用「&body=」，Android 用「?body=」；兩種寫法互相不通用
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  return "sms:" + ph + (ios ? "&body=" : "?body=") + encodeURIComponent(body);
 }
 function lineBindHtml(token, bound){
   const id = String((CONFIG.addon && CONFIG.addon.lineId) || "").trim();
