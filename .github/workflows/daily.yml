@@ -126,4 +126,11 @@ jobs:
               try: call("/api/internal/reminded", {"ids": sent_ids})
               except Exception as ex: print("::warning::標記已提醒失敗（下次執行可能重複寄出）：", type(ex).__name__)
           print(f"{date}：已寄出客人提醒 {len(sent_ids)} 封（符合條件 {cust_n} 筆）")
+
+          # ---------- LINE：明日提醒（只推給已綁定官方 LINE 的客人，每筆只推一次）----------
+          try:
+              r = call("/api/internal/line-remind", {"date": date, "shopPhone": shop_phone})
+              print(f"{date}：已推播 LINE 明日提醒 {r.get('sent', 0)} 則")
+          except Exception as ex:
+              print("::warning::LINE 提醒失敗：", type(ex).__name__)
           PY
