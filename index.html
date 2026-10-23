@@ -484,7 +484,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-T</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-U</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2416,7 +2416,9 @@ function doLookup(){
   if(!byCode && !/^09\d{8}$/.test(phone)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入手機號碼，或輸入 9 碼預約代號", "err"); }
   let list = Store.all().filter(b => byCode ? b.code === code : b.phone === phone);
   if(code) list = list.filter(b => b.code === code);
-  list.sort((a,b) => b.date.localeCompare(a.date));
+  // 排序：未取消且還沒到的預約排最前面（日期近的在上）→ 未取消但已過期 → 已取消（各組內新的在上）
+  { const td = todayStr(), rank = b => b.status === "cancelled" ? 2 : (b.date >= td ? 0 : 1);
+    list.sort((a,b) => rank(a) - rank(b) || (rank(a) === 0 ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date))); }
   if(!list.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼或代號", "err"); }
   msg($("qMsg"), `找到 ${list.length} 筆預約`, "ok");
   $("qResult").innerHTML = list.map(b => bookingCard(b, false)).join("");
