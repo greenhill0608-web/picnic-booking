@@ -449,7 +449,7 @@
       <h2>預約查詢</h2>
       <label for="qPhone" style="margin-top:0">手機號碼</label>
       <input id="qPhone" type="tel" inputmode="numeric" maxlength="10">
-      <label for="qCode">預約代號（選填：預約日期月日＋手機末 5 碼，例 102070045；不填則列出此手機所有預約）</label>
+      <label for="qCode">預約代號（預約日期月日＋手機末 5 碼，例 102070045；只輸入代號也能查，手機號碼可留空）</label>
       <input id="qCode" maxlength="10" style="text-transform:uppercase">
       <button class="btn" id="qBtn">查詢</button>
       <div id="qMsg"></div>
@@ -483,7 +483,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-M</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-N</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2378,7 +2378,7 @@ const fmtTime = iso => { try{ const d = new Date(iso); const z = n => String(n).
 function doLookup(){
   if(Store.api && !doLookup.fresh){
     const ph = $("qPhone").value.trim(), cd = $("qCode").value.trim();
-    if(!/^09\d{8}$/.test(ph)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入正確的手機號碼", "err"); }
+    if(!/^09\d{8}$/.test(ph) && !(ph === "" && /^\d{9}$/.test(cd))){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入手機號碼，或輸入 9 碼預約代號", "err"); }
     msg($("qMsg"), "查詢中…", "ok");
     const job = GH.adminToken() ? Store.load() : API.call("POST", "/api/lookup", { phone: ph, code: cd }).then(r => { Store._b = r.bookings || []; });
     return job.then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), e.message, "err"));
@@ -2386,11 +2386,12 @@ function doLookup(){
   if(Store.remote && !Store.api && !doLookup.fresh){ msg($("qMsg"), "查詢中…", "ok"); return Store.load().then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), "無法連線 GitHub：" + e.message, "err")); }
   const phone = $("qPhone").value.trim();
   const code = $("qCode").value.trim().toUpperCase();
-  if(!/^09\d{8}$/.test(phone)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入正確的手機號碼", "err"); }
-  let list = Store.all().filter(b => b.phone === phone);
+  const byCode = phone === "" && /^\d{9}$/.test(code);          // 只輸入預約代號也可查
+  if(!byCode && !/^09\d{8}$/.test(phone)){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入手機號碼，或輸入 9 碼預約代號", "err"); }
+  let list = Store.all().filter(b => byCode ? b.code === code : b.phone === phone);
   if(code) list = list.filter(b => b.code === code);
   list.sort((a,b) => b.date.localeCompare(a.date));
-  if(!list.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼與代號", "err"); }
+  if(!list.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼或代號", "err"); }
   msg($("qMsg"), `找到 ${list.length} 筆預約`, "ok");
   $("qResult").innerHTML = list.map(b => bookingCard(b, false)).join("");
 }
