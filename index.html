@@ -312,6 +312,7 @@
   <button data-tab="admin" id="adminTabBtn" class="hidden" aria-label="管理後台">管理<br>後台</button>
   <button data-tab="checkin" id="checkinTabBtn" class="hidden" aria-label="現場報到">現場<br>報到</button>
   <button data-tab="kit" id="kitTabBtn" class="hidden" aria-label="套組追蹤">套組<br>追蹤</button>
+  <button data-tab="walk" id="walkTabBtn" class="hidden" aria-label="散客取餐通知">散客取餐<br>通知</button>
 </nav>
 
 <main>
@@ -483,7 +484,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-P</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-S</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -874,6 +875,24 @@
     </div>
   </section>
 
+  <!-- 散客取餐通知：輸入 POS 取餐編號 → LINE 綁定 QR／通知取餐（每天自動清空） -->
+  <section id="tab-walk" class="hidden">
+    <div class="card hidden" id="walkGate">
+      <h2>散客取餐通知</h2>
+      <div class="hint">請先登入管理後台，才能使用。</div>
+      <button class="btn" id="walkGoAdmin">前往管理後台登入</button>
+    </div>
+    <div class="card hidden" id="walkMain">
+      <h2>散客取餐通知</h2>
+      <div class="hint">輸入 POS 的<b>取餐編號</b>（例：12），產生 LINE 綁定 QR Code 讓客人掃描；客人綁定後，餐點好了按一下就能通知取餐。<b>編號每天自動清空，隔天重新開始。</b></div>
+      <label for="walkCode">取餐編號</label>
+      <div style="display:flex;gap:8px"><input id="walkCode" autocomplete="off" maxlength="20" placeholder="例：12" style="flex:1"><button class="btn" id="walkGo" style="width:auto;padding:0 18px">產生 QR</button></div>
+      <div id="walkMsg" class="msg hidden" style="margin-top:8px"></div>
+      <div id="walkDate" class="hint" style="margin:12px 0 4px"></div>
+      <div id="walkList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn ghost small" id="walkRefresh">🔄 重新讀取</button><button class="btn ghost small" id="walkClear" style="color:#b00020">🧹 全部清除</button></div>
+    </div>
+  </section>
 </main>
 
 <footer id="footerBox"></footer>
@@ -2029,9 +2048,10 @@ function selectDate(s){
 function bind(){
   document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
-    ["book","lookup","admin","checkin","kit"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
+    ["book","lookup","admin","checkin","kit","walk"].forEach(t => $("tab-"+t).classList.toggle("hidden", t !== b.dataset.tab));
     if(b.dataset.tab === "admin") openAdmin();
     if(b.dataset.tab === "kit"){ renderKit(); if(Store.remote && GH.adminToken()) Store.load().then(renderKit).catch(e => toast("無法讀取" + BACKEND + "：" + e.message, "err")); }
+    if(b.dataset.tab === "walk"){ renderWalk(); walkLoad(); }
     if(b.dataset.tab === "checkin"){ renderCheckin(); if(Store.remote && GH.adminToken()) Store.load().then(renderCheckin).catch(e => toast("無法讀取" + BACKEND + "：" + e.message, "err")); }
     if(b.dataset.tab === "book") refreshBook();
   }));
@@ -2131,7 +2151,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
+  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
   $("ctSave").addEventListener("click", saveContent);
   $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
@@ -2367,7 +2387,7 @@ function bookingCard(b, admin){
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
       ${needAck ? `<button class="btn small" data-ack="${esc(b.id)}" style="background:#e0a030;min-height:44px;font-size:16px">✔ 確認</button>` : ""}
       ${admin && !b.lineUserId && !cancelled && upcoming && smsBindHref(b) ? `<a class="btn small" href="${esc(smsBindHref(b))}" style="background:#1e88e5;text-decoration:none;display:inline-flex;align-items:center">📱 傳簡訊邀請綁定 LINE</a>` : ""}
-      ${admin && b.lineUserId && !cancelled ? `<button class="btn small" data-line="${esc(b.id)}" style="background:#06c755">💬 傳 LINE</button>` : ""}
+      ${admin && b.lineUserId && !cancelled ? `<button class="btn small" data-line="${esc(b.id)}" style="background:#06c755">💬 傳 LINE</button><button class="btn ghost small" data-unbind="${esc(b.id)}" style="color:#b00020">取消綁定</button>` : ""}
       ${admin ? `<button class="btn small" data-edit="${esc(b.id)}">編輯／備註</button>` : ""}
       ${!admin && !cancelled && b.date > todayStr() && !b.lodging ? `<button class="btn small" data-cedit="${esc(b.id)}">修改預約</button>` : ""}
       ${!cancelled && upcoming ? `<button class="btn danger small" data-cancel="${esc(b.id)}">取消預約</button>` : ""}
@@ -2528,7 +2548,8 @@ function kitLineHtml(b){
   if(b.lineUserId){
     const sent = b.pickupNotifiedAt ? `<span style="color:#06a847">✔ 已通知 ${esc(fmtTime(b.pickupNotifiedAt).slice(5))}</span>` : "";
     return `<div class="kit-line" style="margin-top:8px">✅ LINE 已綁定${b.lineName ? `：<b>${esc(b.lineName)}</b> <button type="button" class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button>` : ""}`
-      + `<div style="margin-top:6px"><button type="button" class="btn small" data-pickup="${id}" style="background:#06c755">🍱 通知客人：已可取餐</button> ${sent}</div></div>`;
+      + `<div style="margin-top:6px"><button type="button" class="btn small" data-pickup="${id}" style="background:#06c755">🍱 通知客人：已可取餐</button> ${sent}</div>`
+      + `<div style="margin-top:6px"><button type="button" class="btn ghost small" data-unbind="${id}" style="padding:2px 10px;min-height:0;color:#b00020">取消綁定</button></div></div>`;
   }
   const url = lineBindUrl(b.lineToken);
   if(!url) return `<div class="hint" style="margin-top:8px">尚未綁定 LINE</div>`;
@@ -2536,17 +2557,32 @@ function kitLineHtml(b){
   return `<div class="kit-line" style="margin-top:8px">⬜ 尚未綁定 LINE <button type="button" class="btn ghost small" data-qr="${id}" style="padding:2px 10px;min-height:0">${open ? "收起 QR" : "📱 顯示綁定 QR"}</button>`
     + `<div class="kit-qr ${open ? "" : "hidden"}" style="margin-top:8px;text-align:center"><div style="display:inline-block;background:#fff;padding:12px;border-radius:10px;width:220px;max-width:70vw">${open ? qrSvg(url) : ""}</div><div class="hint" style="margin:6px 0 0">請客人用手機相機掃描，開啟 LINE 後按「送出」完成綁定</div></div></div>`;
 }
+function unbindLine(btn){
+  const id = btn.dataset.unbind, b = Store.all().find(x => x.id === id); if(!b) return;
+  twoStep(btn, "再按一次確認取消綁定", async () => {
+    btn.disabled = true;
+    try{
+      const j = await API.call("POST", "/api/admin/line-unbind", { id }, true);
+      delete b.lineUserId; delete b.lineName; delete b.lineNameFail; delete b.pickupNotifiedAt; b.lineToken = j.lineToken || b.lineToken;
+      toast("已取消 " + b.name + " 的 LINE 綁定", "ok");
+    }catch(e){ toast("取消綁定失敗：" + e.message, "err"); btn.disabled = false; }
+    renderKit(); renderWalk(); renderAdminList(); renderSmsBox();
+  });
+}
+const pickupText = b => b.addonQty > 0
+  ? `${b.name} 您好，您預訂的${CONFIG.addon.name} ${b.addonQty} ${CONFIG.addon.unit}已準備好，現在可以前來取餐囉！🍱\n\n南窩綠丘`
+  : `${b.name} 您好，您的餐點已準備好，現在可以前來取餐囉！🍱\n\n南窩綠丘`;
 function sendPickup(btn){
   const id = btn.dataset.pickup, b = Store.all().find(x => x.id === id); if(!b) return;
   twoStep(btn, "再按一次確認傳送", async () => {
     btn.disabled = true; btn.textContent = "傳送中…";
-    const text = `${b.name} 您好，您預訂的${CONFIG.addon.name} ${b.addonQty} ${CONFIG.addon.unit}已準備好，現在可以前來取餐囉！🍱\n\n南窩綠丘`;
+    const text = pickupText(b);
     try{
       const j = await API.call("POST", "/api/admin/line-send", { id, text, tag: "pickup" }, true);
       b.lineLog = j.log; b.pickupNotifiedAt = j.pickupNotifiedAt || new Date().toISOString();
       toast("已傳送取餐通知給 " + b.name, "ok");
     }catch(e){ toast("傳送失敗：" + e.message, "err"); }
-    renderKit();
+    renderKit(); renderWalk();
   });
 }
 function renderKit(){
@@ -2652,6 +2688,68 @@ async function addLodging(btn){
   msg(out, `✔ 已新增（${guestName(b)}）：${name}　${qty} ${CONFIG.addon.unit}`, "ok");
   toast(guestName(b) + "套組已新增", "ok");
   renderKit(); renderAdminList(); renderStats(); refreshBook();
+}
+/* ========= 後台：散客取餐通知（POS 取餐編號 → 綁定 QR／通知取餐；每天自動清空）========= */
+let walkItems = [], walkDate = "";
+const walkQrOpen = new Set();
+const lineTicketUrl = token => {
+  const id = String((CONFIG.addon && CONFIG.addon.lineId) || "").trim();
+  if(!token || !/^@?[\w.-]{3,40}$/.test(id)) return "";
+  return "https://line.me/R/oaMessage/" + encodeURIComponent(id.startsWith("@") ? id : "@" + id) + "/?" + encodeURIComponent("綁定取餐 " + token + "\n👆 請按「送出」完成綁定");
+};
+function renderWalk(){
+  if(!$("walkList")) return;
+  const logged = isAdminLogged();
+  $("walkGate").classList.toggle("hidden", logged); $("walkMain").classList.toggle("hidden", !logged);
+  if(!logged) return;
+  $("walkDate").textContent = walkDate ? `今天 ${walkDate.slice(5).replace("-", "/")}　共 ${walkItems.length} 個編號（隔天自動清空）` : "";
+  const list = walkItems.slice().sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)));
+  $("walkList").innerHTML = list.length ? list.map(t => {
+    const no = esc(t.no), url = lineTicketUrl(t.token);
+    let st;
+    if(t.userId){
+      st = `<div style="margin-top:6px">✅ LINE 已綁定${t.name ? `：<b>${esc(t.name)}</b> <button type="button" class="btn ghost small" data-copy="${esc(t.name)}" style="padding:2px 10px;min-height:0">複製</button>` : ""}</div>`
+        + `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn small" data-wnotify="${no}" style="background:#06c755">🍱 通知客人：已可取餐</button>`
+        + (t.notifiedAt ? `<span style="color:#06a847">✔ 已通知 ${esc(fmtTime(t.notifiedAt).slice(11))}</span>` : "")
+        + `<button type="button" class="btn ghost small" data-wunbind="${no}" style="padding:2px 10px;min-height:0;color:#b00020">取消綁定</button></div>`;
+    } else if(!url){
+      st = `<div class="hint" style="margin-top:6px">請先到管理後台「內容設定」填入官方 LINE ID，才能產生 QR。</div>`;
+    } else {
+      const open = walkQrOpen.has(t.no);
+      st = `<div style="margin-top:6px">⬜ 尚未綁定 LINE <button type="button" class="btn ghost small" data-wqr="${no}" style="padding:2px 10px;min-height:0">${open ? "收起 QR" : "📱 顯示綁定 QR"}</button></div>`
+        + (open ? `<div style="margin-top:8px;text-align:center"><div style="display:inline-block;background:#fff;padding:12px;border-radius:10px;width:240px;max-width:75vw">${qrSvg(url)}</div><div class="hint" style="margin:6px 0 0">請客人用手機相機掃描，開啟 LINE 後按「送出」完成綁定</div></div>` : "");
+    }
+    return `<div class="kit-row"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">取餐編號 ${no}</b><button type="button" class="btn ghost small" data-wdel="${no}" style="padding:2px 10px;min-height:0;color:#b00020">刪除</button></div>${st}</div>`;
+  }).join("") : `<div class="hint">今天還沒有編號。輸入 POS 取餐編號後按「產生 QR」。</div>`;
+}
+async function walkApi(path, body){
+  const j = await API.call(path.startsWith("/api/admin/pickups") ? "GET" : "POST", path, body, true);
+  walkItems = j.items || []; walkDate = j.date || walkDate; renderWalk(); return j;
+}
+async function walkLoad(){ if(Store.remote && GH.adminToken()){ try{ await walkApi("/api/admin/pickups"); }catch(e){ toast("無法讀取：" + e.message, "err"); } } }
+async function walkAdd(){
+  const no = $("walkCode").value.trim();
+  if(!no) return msg($("walkMsg"), "請輸入取餐編號", "err");
+  try{ await walkApi("/api/admin/pickup", { no }); walkQrOpen.add(no); $("walkCode").value = ""; msg($("walkMsg"), `已建立編號 ${no}，請讓客人掃描 QR`, "ok"); renderWalk(); }
+  catch(e){ msg($("walkMsg"), e.message, "err"); }
+}
+function bindWalk(){
+  $("walkGo").addEventListener("click", walkAdd);
+  $("walkCode").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); walkAdd(); } });
+  $("walkGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
+  $("walkRefresh").addEventListener("click", walkLoad);
+  $("walkClear").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認全部清除", async () => {
+    try{ await walkApi("/api/admin/pickup-delete", { all: true }); walkQrOpen.clear(); msg($("walkMsg"), "已全部清除", "ok"); }catch(er){ toast(er.message, "err"); }
+  }));
+  $("walkList").addEventListener("click", e => {
+    const q = e.target.closest("[data-wqr]"), n = e.target.closest("[data-wnotify]"), u = e.target.closest("[data-wunbind]"), d = e.target.closest("[data-wdel]");
+    if(q){ const no = q.dataset.wqr; walkQrOpen.has(no) ? walkQrOpen.delete(no) : walkQrOpen.add(no); renderWalk(); }
+    else if(n){ const no = n.dataset.wnotify; twoStep(n, "再按一次確認傳送", async () => { n.disabled = true; try{ await walkApi("/api/admin/pickup-notify", { no }); toast(`已通知取餐編號 ${no}`, "ok"); }catch(er){ toast("傳送失敗：" + er.message, "err"); renderWalk(); } }); }
+    else if(u){ const no = u.dataset.wunbind; twoStep(u, "再按一次確認取消綁定", async () => { try{ await walkApi("/api/admin/pickup-unbind", { no }); walkQrOpen.delete(no); toast(`已取消編號 ${no} 的綁定`, "ok"); }catch(er){ toast(er.message, "err"); } }); }
+    else if(d){ const no = d.dataset.wdel; twoStep(d, "再按一次確認刪除", async () => { try{ await walkApi("/api/admin/pickup-delete", { no }); walkQrOpen.delete(no); }catch(er){ toast(er.message, "err"); } }); }
+  });
+  // 這個分頁開著時，每 8 秒自動更新一次（客人掃描綁定後，畫面會自己變成「已綁定」）
+  setInterval(() => { if(!$("tab-walk").classList.contains("hidden") && isAdminLogged() && !document.hidden) walkLoad(); }, 8000);
 }
 function bindKit(){
   $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
@@ -3565,8 +3663,9 @@ document.addEventListener("click", e => {
   if(e.target.id === "lineModalClose"){ $("lineModal").classList.add("hidden"); return; }
   if(e.target.id === "lineModalSend"){ sendLineModal(); return; }
   const t = e.target.closest("[data-ack]"); if(t){ t.disabled = true; ackBookings([t.dataset.ack]); return; }
-  { const qb = e.target.closest && e.target.closest("[data-qr]"); if(qb){ const id = qb.dataset.qr; kitQrOpen.has(id) ? kitQrOpen.delete(id) : kitQrOpen.add(id); renderKit(); return; } }
+  { const qb = e.target.closest && e.target.closest("[data-qr]"); if(qb){ const id = qb.dataset.qr; kitQrOpen.has(id) ? kitQrOpen.delete(id) : kitQrOpen.add(id); renderKit(); renderWalk(); return; } }
   { const pb = e.target.closest && e.target.closest("[data-pickup]"); if(pb){ sendPickup(pb); return; } }
+  { const ub = e.target.closest && e.target.closest("[data-unbind]"); if(ub){ unbindLine(ub); return; } }
   { const cp = e.target.closest && e.target.closest("[data-copy]"); if(cp){ const t = cp.dataset.copy, done = () => { const o = cp.textContent; cp.textContent = "已複製 ✔"; setTimeout(() => cp.textContent = o, 1500); };
       const fb = () => { const ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); }catch(_){} ta.remove(); done(); };
       if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fb); else fb(); return; } }
@@ -3578,7 +3677,7 @@ function renderAdmin(){
   $("adminLogin").classList.toggle("hidden", logged);
   $("adminPanel").classList.toggle("hidden", !logged);
   msg($("adminMsg"), "", "");
-  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAck(); renderAdminList(); renderKit(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); renderTraffic(); }
+  if(logged){ renderCapacity(); updatePurgeCount(); renderContent(); renderAck(); renderAdminList(); renderKit(); renderWalk(); renderStats(); renderSettings(); buildOvFields(); renderOverrides(); renderNoPets(); renderPetDays(); syncOvFields(); renderInventory(); renderAnnounceForm(); renderTraffic(); }
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
@@ -3875,9 +3974,10 @@ function syncAdminEntry(){
   if(urlWant){ try{ localStorage.setItem("picnic_admin_entry", "1"); }catch(e){} }
   const want = urlWant || flag;
   $("adminTabBtn").classList.toggle("hidden", !want && !($("tab-admin") && !$("tab-admin").classList.contains("hidden")));
-  const sub = ["checkin","kit"].some(t => !$("tab-" + t).classList.contains("hidden"));
+  const sub = ["checkin","kit","walk"].some(t => !$("tab-" + t).classList.contains("hidden"));
   $("checkinTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && !sub);
   $("kitTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && !sub);
+  $("walkTabBtn").classList.toggle("hidden", $("adminTabBtn").classList.contains("hidden") && !sub);
   if(urlWant && $("tab-admin").classList.contains("hidden") && !sub) $("adminTabBtn").click();
 }
 window.addEventListener("hashchange", syncAdminEntry);
