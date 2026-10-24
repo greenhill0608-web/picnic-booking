@@ -496,7 +496,7 @@
         <div class="hint">可用代換字：{姓名} {日期} {星期} {場次} {抵達} {人數} {代號} {網址}（預約網站）{綁定連結}（還沒綁定 LINE 的客人才會帶入一鍵綁定短連結，已綁定的會自動省略）</div>
         <div id="bkOut" style="margin-top:8px"></div>
       </details>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-V</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-W</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2195,6 +2195,14 @@ function bind(){
 
   // 勾選場次時，讓人數上限欄位變淡／恢復
   document.addEventListener("change", e => {
+  const c = e.target.closest && e.target.closest("[data-pc]"); if(!c) return;
+  const b = Store.all().find(x => x.id === c.dataset.id); if(!b) return;
+  const nb = Object.assign({}, b), on = c.checked, at = new Date().toISOString();
+  if(c.dataset.pc === "ok"){ nb.phoneOk = on; if(on) nb.phoneMiss = false; nb.phoneAt = at; }
+  else { nb.phoneMiss = on; if(on) nb.phoneOk = false; nb.phoneAt = at; }
+  Store.updateFast(b.id, nb); renderAdminList();
+});
+document.addEventListener("change",e => {
     if(e.target.classList && e.target.classList.contains("s-open"))
       e.target.closest(".scell").classList.toggle("off", !e.target.checked);
   });
@@ -2396,6 +2404,7 @@ function bookingCard(b, admin){
     ${admin && b.lineName ? `<div>💬 LINE：<b>${esc(b.lineName)}</b> <button class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button></div>` : ""}
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
+    ${admin && !cancelled ? `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:4px 0"><label style="display:inline-flex;align-items:center;gap:6px;font-size:16px;cursor:pointer"><input type="checkbox" data-pc="ok" data-id="${esc(b.id)}" ${b.phoneOk ? "checked" : ""} style="width:22px;height:22px"><span style="${b.phoneOk ? "color:#06a847;font-weight:700" : ""}">📞 已電話確認</span></label><label style="display:inline-flex;align-items:center;gap:6px;font-size:16px;cursor:pointer"><input type="checkbox" data-pc="miss" data-id="${esc(b.id)}" ${b.phoneMiss ? "checked" : ""} style="width:22px;height:22px"><span style="${b.phoneMiss ? "color:#b00020;font-weight:700" : ""}">📵 未接</span></label></div>` : ""}
     ${!cancelled && depositDue(b.addonQty || 0) ? (admin ? prepayHtml(b) : depositHtml(b.addonQty)) : ""}
     ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
     ${admin && b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
