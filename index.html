@@ -484,19 +484,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <details class="card" id="bulkCard">
-        <summary style="cursor:pointer;font-weight:700">📨 批量簡訊（指定日期的客人）</summary>
-        <div class="hint" style="margin:8px 0">選日期與對象，寫好內容，按「傳給下一位」會打開手機的簡訊 App（已填好那位客人的電話與內容），送出後回到這裡再按下一位。<b>一次只傳一位</b>，客人之間不會看到彼此的號碼。請用手機開後台。</div>
-        <div class="grid2">
-          <div><label for="bkDate">用餐日期</label><input id="bkDate" type="date"></div>
-          <div><label for="bkWho">對象</label><select id="bkWho"><option value="all">全部客人</option><option value="unbound">只有還沒綁定 LINE 的</option><option value="bound">只有已綁定 LINE 的</option></select></div>
-        </div>
-        <label for="bkText">簡訊內容</label>
-        <textarea id="bkText" rows="5" maxlength="500" style="width:100%"></textarea>
-        <div class="hint">可用代換字：{姓名} {日期} {星期} {場次} {抵達} {人數} {代號} {網址}（預約網站）{綁定連結}（還沒綁定 LINE 的客人才會帶入一鍵綁定短連結，已綁定的會自動省略）</div>
-        <div id="bkOut" style="margin-top:8px"></div>
-      </details>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-W</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-X</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -808,6 +796,19 @@
         <button class="btn ghost small" id="hideEntryBtn" style="margin-top:8px">在這台裝置隱藏後台入口</button>
         <button class="btn ghost" id="resetSettingsBtn">還原營業設定為預設值</button>
         <button class="btn danger" id="wipeBtn">清除所有資料（此瀏覽器）</button>
+      </div>
+
+      <div class="card" id="bulkCard">
+        <h2>📨 批量簡訊（指定日期的客人）</h2>
+        <div class="hint" style="margin:8px 0">選日期與對象，寫好內容，按「傳給下一位」會打開手機的簡訊 App（已填好那位客人的電話與內容），送出後回到這裡再按下一位。<b>一次只傳一位</b>，客人之間不會看到彼此的號碼。請用手機開後台。</div>
+        <div class="grid2">
+          <div><label for="bkDate">用餐日期</label><input id="bkDate" type="date"></div>
+          <div><label for="bkWho">對象</label><select id="bkWho"><option value="all">全部客人</option><option value="unbound">只有還沒綁定 LINE 的</option><option value="bound">只有已綁定 LINE 的</option></select></div>
+        </div>
+        <label for="bkText">簡訊內容</label>
+        <textarea id="bkText" rows="5" maxlength="500" style="width:100%"></textarea>
+        <div class="hint">可用代換字：{姓名} {日期} {星期} {場次} {抵達} {人數} {代號} {網址}（預約網站）{綁定連結}（還沒綁定 LINE 的客人才會帶入一鍵綁定短連結，已綁定的會自動省略）</div>
+        <div id="bkOut" style="margin-top:8px"></div>
       </div>
     </div>
   </section>
@@ -2829,7 +2830,7 @@ function bindBulk(){
     const a = e.target.closest("[data-bulk-next]"); if(a){ bulkSentSet(a.dataset.bulkNext); setTimeout(renderBulk, 600); return; }
     if(e.target.id === "bkReset"){ try{ localStorage.removeItem(bulkKey()); }catch(er){} renderBulk(); }
   });
-  $("bulkCard").addEventListener("toggle", renderBulk);
+  document.addEventListener("toggle", e => { if(e.target && e.target.id === "bulkCard") renderBulk(); }, true);
 }
 function bindKit(){
   $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
@@ -2930,8 +2931,8 @@ function makeFoldable(){
     const sum = document.createElement("summary"); sum.appendChild(h);
     det.appendChild(sum);
     while(card.firstChild) det.appendChild(card.firstChild);
-    det.open = title in saved ? !!saved[title] : OPEN_DEFAULT.includes(title);
-    det.addEventListener("toggle", () => { saved[title] = det.open; save(); });
+    det.open = false;   // 每次進後台都全部收合，不記住上次狀態
+    
     card.replaceWith(det);
   });
   const all = open => $("adminPanel").querySelectorAll("details.fold").forEach(d => d.open = open);
@@ -2959,7 +2960,7 @@ function makeLayout(foldSaved){
     const res = L.order.filter(k => byKey[k]);
     def.forEach((k, i) => {
       if(res.includes(k)) return;
-      let at = 0; for(let j = i - 1; j >= 0; j--){ const x = res.indexOf(def[j]); if(x >= 0){ at = x + 1; break; } }
+      let at = k.indexOf("批量簡訊") >= 0 ? res.length : 0; if(!(k.indexOf("批量簡訊") >= 0)) for(let j = i - 1; j >= 0; j--){ const x = res.indexOf(def[j]); if(x >= 0){ at = x + 1; break; } }
       res.splice(at, 0, k);
     });
     res.forEach(k => panel.appendChild(byKey[k]));
@@ -3000,7 +3001,7 @@ function makeLayout(foldSaved){
       markDots(); panel.scrollIntoView({ block:"start" });
     }else if(prevOpen){
       prevOpen.forEach(([d, o]) => d.open = o); prevOpen = null;
-      cards().forEach(d => { foldSaved[keyOf(d)] = d.open; }); try{ localStorage.setItem("picnic_fold", JSON.stringify(foldSaved)); }catch(e){}
+      
     }
   }
   $("layEdit").addEventListener("click", () => setEdit(!panel.classList.contains("lay-edit")));
