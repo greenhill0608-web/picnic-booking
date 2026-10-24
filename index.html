@@ -484,7 +484,19 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-U</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <details class="card" id="bulkCard">
+        <summary style="cursor:pointer;font-weight:700">📨 批量簡訊（指定日期的客人）</summary>
+        <div class="hint" style="margin:8px 0">選日期與對象，寫好內容，按「傳給下一位」會打開手機的簡訊 App（已填好那位客人的電話與內容），送出後回到這裡再按下一位。<b>一次只傳一位</b>，客人之間不會看到彼此的號碼。請用手機開後台。</div>
+        <div class="grid2">
+          <div><label for="bkDate">用餐日期</label><input id="bkDate" type="date"></div>
+          <div><label for="bkWho">對象</label><select id="bkWho"><option value="all">全部客人</option><option value="unbound">只有還沒綁定 LINE 的</option><option value="bound">只有已綁定 LINE 的</option></select></div>
+        </div>
+        <label for="bkText">簡訊內容</label>
+        <textarea id="bkText" rows="5" maxlength="500" style="width:100%"></textarea>
+        <div class="hint">可用代換字：{姓名} {日期} {星期} {場次} {抵達} {人數} {代號} {網址}（預約網站）{綁定連結}（還沒綁定 LINE 的客人才會帶入一鍵綁定短連結，已綁定的會自動省略）</div>
+        <div id="bkOut" style="margin-top:8px"></div>
+      </details>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-V</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -2156,7 +2168,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
+  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindBulk(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
   $("ctSave").addEventListener("click", saveContent);
   $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
@@ -2757,6 +2769,58 @@ function bindWalk(){
   });
   // 這個分頁開著時，每 8 秒自動更新一次（客人掃描綁定後，畫面會自己變成「已綁定」）
   setInterval(() => { if(!$("tab-walk").classList.contains("hidden") && isAdminLogged() && !document.hidden) walkLoad(); }, 8000);
+}
+/* ========= 後台：批量簡訊（指定日期，逐位傳送）========= */
+const BULK_DEFAULT = "{姓名} 您好，提醒您 {日期}（週{星期}）{場次} 有一筆南窩綠丘野餐預約，預計 {抵達} 抵達，預約代號 {代號}。期待您的光臨！";
+const bulkKey = () => "ghBulkSent:" + ($("bkDate").value || "");
+const bulkSentGet = () => { try{ return JSON.parse(localStorage.getItem(bulkKey()) || "{}"); }catch(e){ return {}; } };
+const bulkSentSet = id => { try{ const o = bulkSentGet(); o[id] = 1; localStorage.setItem(bulkKey(), JSON.stringify(o)); }catch(e){} };
+function bulkList(){
+  const d = $("bkDate").value, who = $("bkWho").value; if(!d) return [];
+  return Store.all().filter(b => b.status === "confirmed" && !b.walkin && b.date === d && /^09\d{8}$/.test(String(b.phone || "").replace(/[^\d]/g, "")))
+    .filter(b => who === "all" || (who === "bound") === !!b.lineUserId)
+    .sort((x, y) => String(x.arrival || "").localeCompare(String(y.arrival || "")) || x.name.localeCompare(y.name));
+}
+function bulkBody(b){
+  const WEEK = "日一二三四五六", ses = sessionById(sessionOf(b));
+  const wd = WEEK[new Date(b.date + "T00:00:00Z").getUTCDay()];
+  const site = location.href.split("#")[0].split("?")[0];
+  const bind = (!b.lineUserId && b.lineToken && lineBindUrl(b.lineToken)) ? (Store.remote ? CONFIG.apiUrl.replace(/\/+$/, "") + "/l/" + b.lineToken : lineBindUrl(b.lineToken)) : "";
+  const map = { "姓名": b.name, "日期": b.date.slice(5).replace("-", "/"), "星期": wd, "場次": ses ? ses.label : "", "抵達": b.arrival || "", "人數": `大人${b.adults}孩童${b.children}`, "代號": b.code, "網址": site, "綁定連結": bind };
+  return $("bkText").value.replace(/\{([^{}]+)\}/g, (m, k) => (k in map ? map[k] : m)).replace(/[ \t]+\n/g, "\n").trim();
+}
+function bulkHref(b){
+  const ph = String(b.phone).replace(/[^\d]/g, ""), ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  return "sms:" + ph + (ios ? "&" : "?") + "body=" + encodeURIComponent(bulkBody(b));
+}
+function renderBulk(){
+  if(!$("bkOut")) return;
+  const list = bulkList(), sent = bulkSentGet(), todo = list.filter(b => !sent[b.id]);
+  const len = list[0] ? Array.from(bulkBody(list[0])).length : 0, ucs = list[0] ? /[^\x00-\x7f]/.test(bulkBody(list[0])) : true;
+  const per = len === 0 ? 0 : (ucs ? (len <= 70 ? 1 : Math.ceil(len / 67)) : (len <= 160 ? 1 : Math.ceil(len / 153)));
+  let h = "";
+  if(!$("bkDate").value) h = `<div class="hint">請先選日期</div>`;
+  else if(!list.length) h = `<div class="hint">這天沒有符合的客人（需要是未取消、有 09 開頭手機號碼的預約）。</div>`;
+  else {
+    h = `<div class="hint">共 ${list.length} 位，已傳 ${list.length - todo.length} 位，還沒傳 ${todo.length} 位。第一位的簡訊約 ${len} 字，約 <b>${per} 則</b>（含中文每則 70 字）。</div>`
+      + (todo.length ? `<a class="btn" data-bulk-next="${esc(todo[0].id)}" href="${esc(bulkHref(todo[0]))}" style="text-decoration:none;display:block;text-align:center;background:#1e88e5;min-height:48px;line-height:48px;font-size:17px">📱 傳給下一位：${esc(todo[0].name)}（還剩 ${todo.length} 位）</a>` : `<div class="msg ok">✅ 這天的客人都傳完了</div>`)
+      + `<div style="margin-top:8px">` + list.map(b => `<div class="ack-row"><div class="ack-info"><b>${esc(b.name)}</b>　${esc(b.phone)}<br>${esc(b.arrival || "")}${b.lineUserId ? "　✅ LINE" : ""}${sent[b.id] ? ' <span style="color:#06a847">✔ 已傳</span>' : ""}</div>`
+      + `<a class="btn small ghost" data-bulk-next="${esc(b.id)}" href="${esc(bulkHref(b))}" style="text-decoration:none">傳簡訊</a></div>`).join("") + `</div>`
+      + `<button type="button" class="btn ghost small" id="bkReset" style="margin-top:8px">重設「已傳」記號</button>`;
+  }
+  $("bkOut").innerHTML = h;
+}
+function bindBulk(){
+  const t = (() => { try{ return localStorage.getItem("ghBulkText"); }catch(e){ return null; } })();
+  $("bkText").value = t || BULK_DEFAULT;
+  const tm = new Date(Date.now() + 86400000); $("bkDate").value = tm.getFullYear() + "-" + String(tm.getMonth() + 1).padStart(2, "0") + "-" + String(tm.getDate()).padStart(2, "0");
+  ["bkDate", "bkWho"].forEach(id => $(id).addEventListener("change", renderBulk));
+  $("bkText").addEventListener("input", () => { try{ localStorage.setItem("ghBulkText", $("bkText").value); }catch(e){} renderBulk(); });
+  $("bkOut").addEventListener("click", e => {
+    const a = e.target.closest("[data-bulk-next]"); if(a){ bulkSentSet(a.dataset.bulkNext); setTimeout(renderBulk, 600); return; }
+    if(e.target.id === "bkReset"){ try{ localStorage.removeItem(bulkKey()); }catch(er){} renderBulk(); }
+  });
+  $("bulkCard").addEventListener("toggle", renderBulk);
 }
 function bindKit(){
   $("kSession").innerHTML = `<option value="">全部場次</option>` + SESSIONS.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("");
@@ -3623,7 +3687,7 @@ function renderSmsBox(){
 }
 const pendingAck = () => Store.all().filter(b => b.needAck && !b.ackAt && b.status === "confirmed").sort((x, y) => String(x.createdAt).localeCompare(String(y.createdAt)));
 function renderAck(){
-  renderSmsBox();
+  renderSmsBox(); renderBulk();
   const box = $("ackBox"); if(!box) return;
   const L = pendingAck();
   box.classList.toggle("hidden", !L.length);
