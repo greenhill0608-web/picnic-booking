@@ -484,7 +484,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-X</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-Z</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -3763,13 +3763,13 @@ function renderAdmin(){
 }
 
 /* ========= 後台統計：人數・毛小孩・車輛・抵達時間 ========= */
-const zeroStat = () => ({ groups:0, people:0, adults:0, children:0, pets:0, cars:0, arrivals:{} });
+const zeroStat = () => ({ groups:0, people:0, adults:0, children:0, pets:0, cars:0, sets:0, arrivals:{} });
 function addStat(s, b){
   s.groups++; s.adults += b.adults; s.children += b.children; s.people += b.adults + b.children;
-  s.pets += petsOf(b); s.cars += carsOf(b);
+  s.pets += petsOf(b); s.cars += carsOf(b); s.sets += (+b.addonQty || 0);
   const t = b.arrival || "—";
-  const a = s.arrivals[t] || (s.arrivals[t] = { groups:0, people:0, cars:0, pets:0 });
-  a.groups++; a.people += b.adults + b.children; a.cars += carsOf(b); a.pets += petsOf(b);
+  const a = s.arrivals[t] || (s.arrivals[t] = { groups:0, people:0, cars:0, pets:0, sets:0 });
+  a.groups++; a.people += b.adults + b.children; a.cars += carsOf(b); a.pets += petsOf(b); a.sets += (+b.addonQty || 0);
 }
 function statsFor(date){
   const res = { total: zeroStat(), sessions: {} };
@@ -3790,13 +3790,14 @@ function renderStats(){
     ? `<small style="margin-bottom:4px">有預約的日期（點一下切換）：</small>` + dates.map(x => `<button type="button" class="btn ghost small" data-st="${esc(x)}" style="margin:2px 4px 2px 0">${esc(x.slice(5))}</button>`).join("")
     : "";
   const st = statsFor(date);
-  const line = o => `${o.groups} 組・${o.people} 位（大人 ${o.adults}、孩童 ${o.children}）・毛小孩 ${o.pets} 隻・車 ${o.cars} 輛`;
-  let html = `<div class="stat-total"><b>${esc(showDate(date))} 全天合計</b><br>${line(st.total)}</div>`;
+  const line = o => `${o.groups} 筆預約・${o.people} 位（大人 ${o.adults}、孩童 ${o.children}）・毛小孩 ${o.pets} 隻・車 ${o.cars} 輛・${esc(CONFIG.addon.name)} ${o.sets} ${esc(CONFIG.addon.unit)}`;
+  const lodgeSets = Store.all().filter(b => b.lodging && b.status === "confirmed" && b.date === date).reduce((n, b) => n + (+b.addonQty || 0), 0);
+  let html = `<div class="stat-total"><b>${esc(showDate(date))} 全天合計</b><br>${line(st.total)}${lodgeSets ? `<br><small>另有住宿客／互惠客 ${lodgeSets} ${esc(CONFIG.addon.unit)}（不計入上列）</small>` : ""}</div>`;
   SESSIONS.forEach(x => {
     const s = st.sessions[x.id];
     const rows = Object.keys(s.arrivals).sort().map(t => {
       const a = s.arrivals[t];
-      return `<div class="stat-row"><span>${esc(t)} 抵達</span><span>${a.groups} 組・${a.people} 位・毛小孩 ${a.pets}・車 ${a.cars}</span></div>`;
+      return `<div class="stat-row"><span>${esc(t)} 抵達</span><span>${a.groups} 筆預約・${a.people} 位・毛小孩 ${a.pets}・車 ${a.cars}・${esc(CONFIG.addon.unit)} ${a.sets}</span></div>`;
     }).join("");
     html += `<div class="stat-sess"><div class="h">${esc(x.label)} ${esc(x.time)}</div>`
       + (s.groups ? `<div>${line(s)}</div>${rows}` : `<div class="hint" style="margin:2px 0 0">尚無預約</div>`) + `</div>`;
@@ -3819,9 +3820,9 @@ function exportStatsPdf(){
   groups.forEach(sid => {
     const rows = list.filter(b => sessionOf(b) === sid), ses = sessionById(sid), name = ses ? `${ses.label} ${ses.time}` : String(sid);
     rows.forEach(b => { body += tr("", [esc(name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大人 ${+b.adults || 0}／孩童 ${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || ""]); });
-    const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 組`, "", t.p, t.pets, t.cars, "", t.sets]);
+    const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 筆預約`, "", t.p, t.pets, t.cars, "", t.sets]);
   });
-  const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 組`, "", T.p, T.pets, T.cars, "", T.sets]);
+  const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 筆預約`, "", T.p, T.pets, T.cars, "", T.sets]);
   const now = new Date();
   $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　預約統計</h1>
     <div class="pr-sub">${esc(showDate(date))}　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
