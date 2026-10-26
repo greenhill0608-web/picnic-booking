@@ -484,7 +484,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-Z</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AA</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -903,7 +903,9 @@
       <h2>散客取餐通知</h2>
       <div class="hint">輸入 POS 的<b>取餐編號</b>（例：12），產生 LINE 綁定 QR Code 讓客人掃描；客人綁定後，餐點好了按一下就能通知取餐。<b>編號每天自動清空，隔天重新開始。</b></div>
       <label for="walkCode">取餐編號</label>
-      <div style="display:flex;gap:8px"><input id="walkCode" autocomplete="off" maxlength="20" placeholder="例：12" style="flex:1"><button class="btn" id="walkGo" style="width:auto;padding:0 18px">產生 QR</button></div>
+      <input id="walkCode" autocomplete="off" maxlength="20" placeholder="例：12">
+      <label for="walkPhone">客人電話（必填，先留電話再產生 QR）</label>
+      <div style="display:flex;gap:8px"><input id="walkPhone" type="tel" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="09xxxxxxxx" style="flex:1"><button class="btn" id="walkGo" style="width:auto;padding:0 18px">產生 QR</button></div>
       <div id="walkMsg" class="msg hidden" style="margin-top:8px"></div>
       <div id="walkDate" class="hint" style="margin:12px 0 4px"></div>
       <div id="walkList"></div>
@@ -2642,6 +2644,10 @@ function renderKit(){
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <button type="button" class="kit-name" data-kit-toggle aria-expanded="${open}" title="點一下看電話與付款資訊"><span class="nm">${esc(b.name)}</span><span class="sets">${b.addonQty} ${esc(CONFIG.addon.unit)}</span><span class="chev">▾</span></button>
       <div class="kit-meta">${when}</div>
+      <div class="kit-quick" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center">
+        <span>📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</span>
+        ${b.lineUserId ? `<span>💬 <b>${esc(b.lineName || "已綁定 LINE")}</b>${b.lineName ? ` <button type="button" class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button>` : ""}</span><button type="button" class="btn small" data-pickup="${id}" style="background:#06c755">🍱 通知取餐</button>${b.pickupNotifiedAt ? `<span style="color:#06a847">✔ 已通知 ${esc(fmtTime(b.pickupNotifiedAt).slice(5))}</span>` : ""}` : `<span style="color:var(--muted)">⬜ 未綁定 LINE（展開可顯示 QR）</span>`}
+      </div>
       <div class="kit-detail ${open ? "" : "hidden"}">
         <div>📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒有留電話"}</div>
         ${prepayHtml(b)}
@@ -2748,8 +2754,8 @@ function renderWalk(){
       st = `<div style="margin-top:6px">⬜ 尚未綁定 LINE <button type="button" class="btn ghost small" data-wqr="${no}" style="padding:2px 10px;min-height:0">${open ? "收起 QR" : "📱 顯示綁定 QR"}</button></div>`
         + (open ? `<div style="margin-top:8px;text-align:center"><div style="display:inline-block;background:#fff;padding:12px;border-radius:10px;width:240px;max-width:75vw">${qrSvg(url)}</div><div class="hint" style="margin:6px 0 0">請客人用手機相機掃描，開啟 LINE 後按「送出」完成綁定</div></div>` : "");
     }
-    return `<div class="kit-row"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">取餐編號 ${no}</b><button type="button" class="btn ghost small" data-wdel="${no}" style="padding:2px 10px;min-height:0;color:#b00020">刪除</button></div>${st}</div>`;
-  }).join("") : `<div class="hint">今天還沒有編號。輸入 POS 取餐編號後按「產生 QR」。</div>`;
+    return `<div class="kit-row"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:22px">取餐編號 ${no}</b><button type="button" class="btn ghost small" data-wdel="${no}" style="padding:2px 10px;min-height:0;color:#b00020">刪除</button></div>${t.phone ? `<div style="margin-top:4px">📞 <a href="tel:${esc(t.phone)}">${esc(t.phone)}</a></div>` : ""}${st}</div>`;
+  }).join("") : `<div class="hint">今天還沒有編號。輸入 POS 取餐編號與客人電話後按「產生 QR」。</div>`;
 }
 async function walkApi(path, body){
   const j = await API.call(path.startsWith("/api/admin/pickups") ? "GET" : "POST", path, body, true);
@@ -2758,13 +2764,15 @@ async function walkApi(path, body){
 async function walkLoad(){ if(Store.remote && GH.adminToken()){ try{ await walkApi("/api/admin/pickups"); }catch(e){ toast("無法讀取：" + e.message, "err"); } } }
 async function walkAdd(){
   const no = $("walkCode").value.trim();
+  const phone = $("walkPhone").value.replace(/[^\d]/g, "");
   if(!no) return msg($("walkMsg"), "請輸入取餐編號", "err");
-  try{ await walkApi("/api/admin/pickup", { no }); walkQrOpen.add(no); $("walkCode").value = ""; msg($("walkMsg"), `已建立編號 ${no}，請讓客人掃描 QR`, "ok"); renderWalk(); }
+  if(!/^09\d{8}$/.test(phone)) return msg($("walkMsg"), "請先留下客人電話（09 開頭共 10 碼），再產生 QR", "err");
+  try{ await walkApi("/api/admin/pickup", { no, phone }); walkQrOpen.add(no); $("walkCode").value = ""; $("walkPhone").value = ""; msg($("walkMsg"), `已建立編號 ${no}，請讓客人掃描 QR`, "ok"); renderWalk(); }
   catch(e){ msg($("walkMsg"), e.message, "err"); }
 }
 function bindWalk(){
   $("walkGo").addEventListener("click", walkAdd);
-  $("walkCode").addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); walkAdd(); } });
+  ["walkCode","walkPhone"].forEach(id => $(id).addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); walkAdd(); } }));
   $("walkGoAdmin").addEventListener("click", () => document.querySelector('[data-tab="admin"]').click());
   $("walkRefresh").addEventListener("click", walkLoad);
   $("walkClear").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認全部清除", async () => {
