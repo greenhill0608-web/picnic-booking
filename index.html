@@ -379,6 +379,7 @@
       </div>
       <div class="hint" id="arriveHint">車輛數用於安排停車；請依預計抵達時間到達。</div>
 
+      <div id="addonSec">
       <h2 class="sec">5. 加購</h2>
       <figure class="addon-pic" id="addonPic" title="點一下放大">
         <img id="addonImg" alt="" loading="lazy">
@@ -389,6 +390,7 @@
       <select id="addon"></select>
       <div class="hint" id="addonStock"></div>
       <div id="extraItems"></div>
+      </div>
 
       <h2 class="sec">6. 聯絡資料</h2>
       <label for="name" style="margin-top:0">姓名 *</label>
@@ -484,7 +486,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AA</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AB</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -736,6 +738,11 @@
         </div>
         <div style="margin-top:12px;padding:10px;border:1px solid #bbb;border-radius:10px;background:#fafafa">
           <b>🔧 功能開關</b>
+          <div style="margin:10px 0;padding:10px;border:1px solid #cfe3d3;border-radius:10px;background:#f4fbf5">
+            <label class="inline" style="margin:0 0 6px"><input type="checkbox" id="ctWdOn"><span><b>🍃 平日模式</b>（週一～五：無餐飲服務、可自備餐食、不能加購套組、票價另計；取消勾選並儲存即恢復原本票價與加購）</span></label>
+            <label for="ctWdPrice" style="margin-top:6px">平日大人票價（元，沒有消費抵用金）</label><input id="ctWdPrice" type="number" min="0">
+            <label for="ctWdNote">平日說明（顯示在預約頁）</label><input id="ctWdNote" maxlength="80">
+          </div>
           <label class="inline" style="margin:6px 0"><input type="checkbox" id="ctCheckinOn"><span>顯示「現場報到」分頁（目前預設隱藏；勾選並儲存後，選單就會出現）</span></label>
         </div>
         <label for="ctLineId">官方 LINE ID（用於「接收 LINE 預約通知」按鈕）</label><input id="ctLineId" type="text" placeholder="例：@123abcde（含 @）；留空 = 不顯示按鈕">
@@ -1090,6 +1097,9 @@ const CONFIG = {
   creditNote: "可抵咖啡小棧消費",
   childPrice: 100,
   childNote: "4 歲以上～小六",
+  weekdayOn: true,                         // 平日（週一～五）模式：票價另計、不提供餐飲（不能加購套組）；後台「內容設定」可開關
+  weekdayPrice: 150,                       // 平日大人票價（無餐飲服務、可自備餐食，也沒有消費抵用金）
+  weekdayNote: "平日無提供餐飲服務，歡迎自備餐食入園。",
 
   addon: {
     name: "雙人野餐套組", price: 980, unit: "組", max: 5,
@@ -1127,10 +1137,10 @@ const SESSIONS = CONFIG.sessions;
 // 後台「網站內容」可覆蓋的欄位：先記下程式裡的預設值，之後以 settings.content 疊上去
 const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
-  childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
+  childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, weekdayOn: CONFIG.weekdayOn, weekdayPrice: CONFIG.weekdayPrice, weekdayNote: CONFIG.weekdayNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
   announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, petDayMinAge: CONFIG.petDayMinAge, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
   lineRemind: { on:true, text:"" }, checkinOn: false, addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce","lineRemind","checkinOn"];
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","weekdayOn","weekdayPrice","weekdayNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce","lineRemind","checkinOn"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   setTimeout(() => { try{ syncCheckinBtn(); }catch(e){} }, 0);
@@ -1793,6 +1803,13 @@ function fillItemSelect(sel, it, date, keep, own, hintEl, noun){
 }
 function renderItemSelects(){
   const date = $("date").value, its = allItems();
+  if(isWdMode(date)){                       // 平日不提供餐飲：隱藏加購並歸零
+    $("addonSec").classList.add("hidden");
+    fillItemSelect($("addon"), its[0], date, 0, null, $("addonStock")); $("addon").value = "0";
+    $("extraItems").innerHTML = "";
+    return;
+  }
+  $("addonSec").classList.remove("hidden");
   fillItemSelect($("addon"), its[0], date, +$("addon").value || 0, null, $("addonStock"));
   const box = $("extraItems"), keep = {};
   box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
@@ -1871,7 +1888,8 @@ function refreshBook(){
 
 // 入園資訊的預設內容。{場次}{期間}{天數} 與三個「行代號」會自動依最新設定換成文字
 function infoLineText(name){
-  if(name === "{大人票價行}") return `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : "");
+  if(name === "{大人票價行}") return `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : "")
+    + (CONFIG.weekdayOn ? `；平日（週一～五）大人 ${CONFIG.weekdayPrice} 元／人，${CONFIG.weekdayNote}` : "");
   if(name === "{孩童票價行}") return `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`;
   if(name === "{毛小孩費用行}") return CONFIG.petFee > 0 ? `毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）` : "";
   return name;
@@ -1946,6 +1964,7 @@ function renderDateInfo(){
     .map(x => `${x.label}${x.state === "ok" ? "剩 " + x.rem + " 位" : "額滿"}`).join("、");
   if(isNoPetDay(date)) t += "。⚠️ 當天不開放寵物入園";
   msg(out, t, isNoPetDay(date) ? "info" : "ok");
+  if(isWdMode(date)) out.innerHTML += `<div class="msg info">🍃 <b>平日入園</b>　大人 ${esc(money(CONFIG.weekdayPrice))}／人　${esc(CONFIG.weekdayNote)}</div>`;
   if(isPetDay(date)) out.innerHTML += `<div class="msg info petday">🐾 <b>毛小孩野餐日</b>　${esc(CONFIG.petDayNote)}${petDayKidsRule() ? `<br><b>⚠️ ${esc(petDayKidsRule())}</b>` : ""}</div>`;
 }
 
@@ -2009,18 +2028,22 @@ function depositHtml(q){
 }
 // 有加購套組：每位大人折抵 adultDiscount 元，每個套組最多折抵 discountPerSet 位大人
 const addonDiscount = (adults, sets) => (CONFIG.addon.adultDiscount || 0) * Math.max(0, Math.min(adults, (sets || 0) * (CONFIG.addon.discountPerSet || 0)));
+// 平日模式：週一～五且沒有加購套組的預約，大人票價改為平日價、沒有消費抵用金（已有套組的舊預約維持原價）
+const isWdMode = d => !!CONFIG.weekdayOn && !!d && (w => w >= 1 && w <= 5)(wdOf(d));
+const adultPriceOn = (d, sets) => isWdMode(d) && !(sets > 0) ? CONFIG.weekdayPrice : CONFIG.adultPrice;
 function calc(){
   const a = +$("adults").value, c = +$("children").value, q = +$("addon").value;
   const pets = +$("pets").value || 0, petRate = petFeeOn($("date").value) ? CONFIG.petFee : 0;
+  const wd = isWdMode($("date").value) && !(q > 0), ap = adultPriceOn($("date").value, q);
   const x = {}; let extraTotal = 0;
   extraItems().forEach(it => { const sel = $("ex_" + it.id), n = sel ? (+sel.value || 0) : 0; if(n > 0){ x[it.id] = n; extraTotal += n * it.price; } });
   return {
-    a, c, q, pets, petRate, x, extraTotal,
+    a, c, q, pets, petRate, x, extraTotal, ap, wd,
     petTotal: pets * petRate,
-    adultTotal: a * CONFIG.adultPrice,
+    adultTotal: a * ap,
     childTotal: c * CONFIG.childPrice,
     addonTotal: q * CONFIG.addon.price,
-    credit: a * CONFIG.adultCredit,
+    credit: wd ? 0 : a * CONFIG.adultCredit,
     discount: addonDiscount(a, q),
     discountN: Math.min(a, q * (CONFIG.addon.discountPerSet || 0)),
     get total(){ return this.adultTotal + this.childTotal + this.addonTotal + this.extraTotal + this.petTotal - this.discount; }
@@ -2036,11 +2059,12 @@ function renderKidsAck(){
 function renderPrice(){
   renderKidsAck();
   const p = calc();
+  $("adultLabel").textContent = `大人（${money(p.ap)}／人${p.wd ? "，平日" : ""}）`;
   const people = p.a + p.c;
   $("peopleHint").textContent = `共 ${people} 位`;
   $("peopleHint").style.color = "";
   $("priceBox").innerHTML = `
-    <div class="line"><span>大人 ${p.a} × ${CONFIG.adultPrice}</span><span>${money(p.adultTotal)}</span></div>
+    <div class="line"><span>大人 ${p.a} × ${p.ap}${p.wd ? "（平日）" : ""}</span><span>${money(p.adultTotal)}</span></div>
     <div class="line"><span>孩童 ${p.c} × ${CONFIG.childPrice}</span><span>${money(p.childTotal)}</span></div>
     ${p.q ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${p.q} × ${CONFIG.addon.price}</span><span>${money(p.addonTotal)}</span></div>` : ""}
     ${extraItems().filter(it => p.x[it.id]).map(it => `<div class="line"><span>${esc(it.name)} ${p.x[it.id]} × ${it.price}</span><span>${money(p.x[it.id] * it.price)}</span></div>`).join("")}
@@ -2483,7 +2507,7 @@ function editCalc(){
   const e = readEdit(); if([e.adults, e.children, e.pets, e.addonQty].some(x => !Number.isFinite(x))) return null;
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0;
   const xt = extraItems().reduce((n, it) => n + (Number(e.extras[it.id]) || 0) * it.price, 0);
-  return e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - addonDiscount(e.adults, e.addonQty);
+  return e.adults * adultPriceOn(e.date, e.addonQty) + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - addonDiscount(e.adults, e.addonQty);
 }
 function updateEditCalc(){
   const q = Number($("edAddon").value) || 0, due = depositDue(q), lg = editingId && (Store.all().find(x => x.id === editingId) || {}).lodging;
@@ -3032,7 +3056,7 @@ function cuRead(){
 function cuPrice(e){
   const rate = petFeeOn(e.date) ? CONFIG.petFee : 0, disc = addonDiscount(e.adults, e.addonQty);
   const xt = extraItems().reduce((n, it) => n + (e.extras[it.id] || 0) * it.price, 0);
-  return { disc, pets:e.pets * rate, xt, total: e.adults * CONFIG.adultPrice + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - disc };
+  return { disc, pets:e.pets * rate, xt, total: e.adults * adultPriceOn(e.date, e.addonQty) + e.children * CONFIG.childPrice + e.addonQty * CONFIG.addon.price + xt + e.pets * rate - disc };
 }
 function cuRender(){
   const b = Store.all().find(x => x.id === cuId); if(!b) return;
@@ -3056,7 +3080,7 @@ function cuRender(){
     if(need) $("cuKidsText").innerHTML = `<b>本日為毛小孩野餐日，為確保安全不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園。</b>我確認同行的孩童皆已滿 ${CONFIG.petDayMinAge} 歲。`; else $("cuKids").checked = false; }
   const e2 = cuRead(), pr = cuPrice(e2);
   $("cuPrice").innerHTML = `
-    <div class="line"><span>大人 ${e2.adults} × ${CONFIG.adultPrice}</span><span>${money(e2.adults * CONFIG.adultPrice)}</span></div>
+    <div class="line"><span>大人 ${e2.adults} × ${adultPriceOn(e2.date, e2.addonQty)}</span><span>${money(e2.adults * adultPriceOn(e2.date, e2.addonQty))}</span></div>
     <div class="line"><span>孩童 ${e2.children} × ${CONFIG.childPrice}</span><span>${money(e2.children * CONFIG.childPrice)}</span></div>
     ${e2.addonQty ? `<div class="line"><span>${esc(CONFIG.addon.name)} ${e2.addonQty} × ${CONFIG.addon.price}</span><span>${money(e2.addonQty * CONFIG.addon.price)}</span></div>` : ""}
     ${extraItems().filter(it => e2.extras[it.id]).map(it => `<div class="line"><span>${esc(it.name)} ${e2.extras[it.id]} × ${it.price}</span><span>${money(e2.extras[it.id] * it.price)}</span></div>`).join("")}
@@ -3259,7 +3283,7 @@ function bindInventory(){
 /* ========= 現場報到 ========= */
 const isAdminLogged = () => Store.remote ? !!GH.adminToken() : (sessionStorage.getItem("picnic_admin") === "1" || localStorage.getItem("picnic_admin_saved") === "1");
 function forgetAdmin(){ sessionStorage.removeItem("picnic_admin"); sessionStorage.removeItem("picnic_admin_token"); try{ localStorage.removeItem("picnic_admin_saved"); }catch(e){} }
-const ticketTotal = (date, a, c, pets) => a * CONFIG.adultPrice + c * CONFIG.childPrice + pets * (petFeeOn(date) ? CONFIG.petFee : 0);
+const ticketTotal = (date, a, c, pets) => a * adultPriceOn(date, 0) + c * CONFIG.childPrice + pets * (petFeeOn(date) ? CONFIG.petFee : 0);
 const stepper = (f, label, v, was) => `<div class="ci-row"><div class="lb">${label}${was !== undefined ? `<span class="was">預約 ${was}</span>` : ""}</div>
   <div class="ci-step" data-f="${f}"><button type="button" data-d="-1" aria-label="${label}減少">−</button><b data-v>${v}</b><button type="button" data-d="1" aria-label="${label}增加">＋</button></div></div>`;
 let ciSession = "";
@@ -3343,7 +3367,7 @@ async function ciSave(id, box, btn){
   [["adults","大人",v.a],["children","孩童",v.c],["pets","毛小孩",v.p]].forEach(([f, lb, to]) => { if(was[f] !== to) changes.push({ f:lb, from:was[f], to }); });
   if(!k.checkedIn){ nk.checkedIn = true; nk.checkedInAt = new Date().toISOString(); changes.push({ f:"套組：已報到", from:"否", to:"是" }); }
   if(!changes.length) return toast("人數沒有變更", "ok");
-  const total = v.a * CONFIG.adultPrice + v.c * CONFIG.childPrice + (old.addonQty || 0) * CONFIG.addon.price + v.p * (petFeeOn(old.date) ? CONFIG.petFee : 0) - addonDiscount(v.a, old.addonQty || 0);
+  const total = v.a * adultPriceOn(old.date, old.addonQty) + v.c * CONFIG.childPrice + (old.addonQty || 0) * CONFIG.addon.price + v.p * (petFeeOn(old.date) ? CONFIG.petFee : 0) - addonDiscount(v.a, old.addonQty || 0);
   const now = new Date().toISOString();
   const nb = Object.assign({}, old, { adults:v.a, children:v.c, pets:v.p, total, kit:nk, updatedAt:now,
     history:(Array.isArray(old.history) ? old.history : []).concat([{ at:now, by:"現場報到", changes }]) });
@@ -3518,7 +3542,7 @@ function paCalc(e){
   const num = v => Number.isFinite(v) && v > 0 ? v : 0;
   const a = num(e.adults), c = num(e.children), pt = num(e.pets), q = num(e.addonQty);
   const xt = extraItems().reduce((t, it) => t + num(e.extras[it.id]) * it.price, 0);
-  return a * CONFIG.adultPrice + c * CONFIG.childPrice + q * CONFIG.addon.price + xt + pt * (e.date && petFeeOn(e.date) ? CONFIG.petFee : 0) - addonDiscount(a, q);
+  return a * adultPriceOn(e.date, q) + c * CONFIG.childPrice + q * CONFIG.addon.price + xt + pt * (e.date && petFeeOn(e.date) ? CONFIG.petFee : 0) - addonDiscount(a, q);
 }
 function paFillArrival(){
   const sid = $("paSession").value, cur = $("paArrival").value;
@@ -3608,6 +3632,7 @@ function renderContent(){
   v("ctChildNote", CONFIG.childNote); v("ctCreditNote", CONFIG.creditNote);
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || ""); v("ctLineId", A.lineId || "");
   $("ctCheckinOn").checked = CONFIG.checkinOn === true;
+  $("ctWdOn").checked = CONFIG.weekdayOn !== false; v("ctWdPrice", CONFIG.weekdayPrice); v("ctWdNote", CONFIG.weekdayNote);
   { const lr = CONFIG.lineRemind || {}; $("ctLineRemOn").checked = lr.on !== false; v("ctLineRemText", lr.text || ""); }
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
@@ -3641,12 +3666,14 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), lineRemind:{ on:$("ctLineRemOn").checked, text:t("ctLineRemText") }, checkinOn:$("ctCheckinOn").checked, announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), lineRemind:{ on:$("ctLineRemOn").checked, text:t("ctLineRemText") }, checkinOn:$("ctCheckinOn").checked, weekdayOn:$("ctWdOn").checked, weekdayPrice:n("ctWdPrice"), weekdayNote:t("ctWdNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl"), lineId:t("ctLineId") },
     sessions:{}
   };
   if(![c.adultPrice, c.adultCredit, c.childPrice].every(x => int(x, 0, 100000))) return msg(out, "票價與抵用金請輸入 0 以上的整數", "err");
+  if(!int(c.weekdayPrice, 0, 100000)) return msg(out, "平日票價請輸入 0 以上的整數", "err");
+  if(c.weekdayOn && !c.weekdayNote) return msg(out, "請填寫平日說明", "err");
   if(c.adultCredit > c.adultPrice) return msg(out, "每位大人可抵用金額不能大於大人票價", "err");
   if(!c.childNote || !c.creditNote && c.adultCredit > 0) return msg(out, "請填寫孩童適用說明與抵用金說明", "err");
   if(!c.addon.name || !c.addon.unit) return msg(out, "請填寫加購商品名稱與單位", "err");
