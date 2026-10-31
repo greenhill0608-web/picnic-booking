@@ -486,7 +486,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AB</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AC</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -1792,7 +1792,9 @@ function renderStatic(){
 // 依日期的剩餘數量重建「加購」選單；額滿／當天關閉時不能選並顯示原因
 function fillItemSelect(sel, it, date, keep, own, hintEl, noun){
   const left = date ? Store.stockLeft(it.id, date, own) : Infinity;
-  const mx = Math.max(0, left === Infinity ? it.max : Math.min(it.max, left));
+  // 客人改單：本筆原本已訂的數量一定保留得住（庫存被店家調降或已滿，也不會在改車輛、備註時被默默清成 0）
+  const held = (own && own.status === "confirmed" && own.date === date) ? Math.min(it.max, qtyOf(own, it.id)) : 0;
+  const mx = Math.max(held, 0, left === Infinity ? it.max : Math.min(it.max, left));
   fillSelect(sel, 0, mx, Math.min(keep, mx), n => n === 0 ? (noun || "不加購") : `${n} ${it.unit}`);
   sel.disabled = !!date && mx === 0;
   if(hintEl){
