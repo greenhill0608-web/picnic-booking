@@ -235,6 +235,7 @@
   .addon-pic figcaption small{display:inline;font-size:12px}
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;cursor:zoom-out}
   .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  .item-thumb{width:96px;height:96px;object-fit:cover;border-radius:10px;display:block;margin:10px 0 0;cursor:zoom-in;border:1px solid var(--line)}
 
   /* 月曆 */
   .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
@@ -486,7 +487,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AG</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AH</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -1268,8 +1269,9 @@ const qtyOf = (b, id) => id === "set" ? (+b.addonQty || 0) : (+((b.extras || {})
 function extraItems(){
   const S = Store.settings();
   return (Array.isArray(S.items) ? S.items : []).filter(it => it && /^[a-z][a-z0-9]{0,11}$/.test(String(it.id)) && it.id !== "set" && String(it.name || "").trim())
-    .slice(0, 8).map(it => ({ id:it.id, name:String(it.name).trim(), unit:String(it.unit || "個").trim() || "個", price:Math.max(0, +it.price || 0), max:Math.min(20, Math.max(1, +it.max || 5)) }));
+    .slice(0, 8).map(it => ({ id:it.id, name:String(it.name).trim(), unit:String(it.unit || "個").trim() || "個", price:Math.max(0, +it.price || 0), max:Math.min(20, Math.max(1, +it.max || 5)), img:/^[a-z0-9]{1,16}$/.test(String(it.img || "")) ? String(it.img) : "" }));
 }
+const itemImgUrl = it => it && it.img && API.on() ? `${CONFIG.apiUrl.replace(/\/+$/, "")}/api/item-img/${it.id}?v=${it.img}` : "";
 function allItems(){ const A = CONFIG.addon; return [{ id:"set", name:A.name, unit:A.unit, price:A.price, max:A.max, isSet:true }].concat(extraItems()); }
 const extrasText = b => extraItems().filter(it => qtyOf(b, it.id)).map(it => `${it.name} ${qtyOf(b, it.id)} ${it.unit}`).join("・");
 const Store = {
@@ -1825,7 +1827,7 @@ function renderItemSelects(){
   const box = $("extraItems"), keep = {};
   box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
   const ex = its.slice(1);
-  box.innerHTML = ex.map(it => `<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div>`).join("");
+  box.innerHTML = ex.map(it => `${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div>`).join("");
   ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, sid, keep[it.id] || 0, null, $("exh_" + it.id)));
 }
 
@@ -2232,7 +2234,12 @@ function bind(){
   });
 
   // 勾選場次時，讓人數上限欄位變淡／恢復
-  document.addEventListener("change", e => {
+  document.addEventListener("click", e => {                                  // 租借品項縮圖：點一下放大
+  const z = e.target.closest && e.target.closest("[data-zoom]"); if(!z) return;
+  const lb = document.createElement("div"); lb.className = "lightbox"; lb.innerHTML = `<img alt="" src="${esc(z.dataset.zoom)}">`;
+  lb.addEventListener("click", () => lb.remove()); document.body.appendChild(lb);
+});
+document.addEventListener("change", e => {
   const c = e.target.closest && e.target.closest("[data-pc]"); if(!c) return;
   const b = Store.all().find(x => x.id === c.dataset.id); if(!b) return;
   const nb = Object.assign({}, b), on = c.checked, at = new Date().toISOString();
@@ -3183,9 +3190,10 @@ function bindCustomerEdit(){
 const newItemId = () => "x" + Date.now().toString(36).slice(-7);
 const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), defBy: Object.assign({}, st.defBy || {}), byDate: Object.assign({}, st.byDate || {}) }; };
 function invRowHtml(it, sk){
+  sk = sk || {};
   const defOf = sid => (sk.defBy && Object.prototype.hasOwnProperty.call(sk.defBy, sid)) ? sk.defBy[sid] : sk.def;
   const set = !!it.isSet, dis = set ? ` disabled title="套組的名稱、單價、折抵、訂金請到「網站內容」修改"` : "";
-  return `<div class="inv-row" data-id="${esc(it.id)}" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
+  return `<div class="inv-row" data-id="${esc(it.id)}" data-img="${esc(it.img || "")}" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
     <b>${set ? "🧺 " : ""}${esc(it.name || "新品項")}</b>${set ? `<small style="color:var(--muted)">（名稱與價格在「網站內容」修改）</small>` : ""}
     <div class="grid2">
       <div><label>名稱</label><input class="iv-name" maxlength="20" value="${esc(it.name)}"${dis}></div>
@@ -3193,6 +3201,9 @@ function invRowHtml(it, sk){
       <div><label>單價（元）</label><input class="iv-price" type="number" min="0" value="${esc(it.price)}"${dis}></div>
       <div><label>單筆預約最多</label><input class="iv-max" type="number" min="1" max="20" value="${esc(it.max)}"${dis}></div>
     </div>
+    ${set || !API.on() ? "" : `<div class="iv-photo" style="margin-top:8px"><label style="margin-top:0">照片（客人預約時會看到）</label>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><img class="iv-thumb item-thumb ${it.img ? "" : "hidden"}" style="margin:0" src="${esc(itemImgUrl(it))}" alt="">
+      <input type="file" class="iv-file" accept="image/*" style="max-width:100%"><button type="button" class="btn ghost small iv-imgdel ${it.img ? "" : "hidden"}">移除照片</button></div></div>`}
     <label>固定數量（每個場次各自一個數字，留空 = 不限）</label>
     <div class="grid2">${SESSIONS.map(x => { const v = defOf(x.id); return `<div><label style="margin-top:0">${esc(x.label)}</label><input class="iv-defs" data-sid="${esc(x.id)}" type="number" min="0" placeholder="不限" value="${v === null || v === undefined ? "" : esc(v)}"></div>`; }).join("")}</div>
     ${set ? "" : `<button class="btn ghost small iv-del" style="margin-top:6px">刪除這個品項</button>`}
@@ -3280,7 +3291,7 @@ function invRange(mode){
   const sv = $("invSess").value, r = invSetDays(id, dates, qty, sv ? [sv] : null);
   msg(out, `✔ 已${qty === null ? "恢復預設" : qty === 0 ? "關閉" : "設定為 " + qty + " " + r.it.unit}：${r.it.name}　共 ${dates.length} 天` + (r.warn.length ? `。提醒：${r.warn.join("、")} ${r.it.unit}的預約，已成立的預約不會被取消。` : ""), "ok");
 }
-function invSaveItems(){
+async function invSaveItems(){
   const out = $("invMsg"), S = Store.settings(), items = [], stock = JSON.parse(JSON.stringify(S.stock || {}));
   for(const row of document.querySelectorAll("#invItems .inv-row")){
     const id = row.dataset.id, q = c => row.querySelector(c), defBy = {};
@@ -3298,12 +3309,37 @@ function invSaveItems(){
     if(!name) return msg(out, "請填寫品項名稱", "err");
     if(!Number.isInteger(price) || price < 0 || price > 100000) return msg(out, `「${name}」單價請輸入 0 以上的整數`, "err");
     if(!Number.isInteger(max) || max < 1 || max > 20) return msg(out, `「${name}」單筆預約最多請輸入 1～20`, "err");
-    items.push({ id, name, unit, price, max });
+    items.push({ id, name, unit, price, max, img: row.dataset.img || "", _new: row._newImg || null, _rm: !!row._rmImg });
   }
   if(items.length > 8) return msg(out, "租借品項最多 8 種", "err");
   Object.keys(stock).forEach(id => { if(id !== "set" && !items.some(i => i.id === id)) delete stock[id]; });
+  try{                                          // 先上傳／移除照片，再存設定
+    for(const it of items){
+      if(it._new){ await API.call("PUT", "/api/admin/item-image", { id: it.id, data: it._new }, true); it.img = Date.now().toString(36); }
+      else if(it._rm){ await API.call("PUT", "/api/admin/item-image", { id: it.id, data: "" }, true); it.img = ""; }
+      delete it._new; delete it._rm;
+    }
+  }catch(e){ return msg(out, "照片上傳失敗：" + e.message, "err"); }
   S.items = items; S.stock = stock;
   invCommit(S); msg(out, Store.remote ? "已儲存，正在寫入" + BACKEND + "…" : "已儲存", "ok");
+}
+function resizeImage(file, max){
+  return new Promise((ok, no) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(u);
+      let k = Math.min(1, max / Math.max(img.width, img.height)), q = 0.82, out = "";
+      for(let i = 0; i < 4; i++){
+        const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL("image/jpeg", q); if(out.length < 300000) return ok(out);
+        k *= 0.8; q = Math.max(0.5, q - 0.1);
+      }
+      no(new Error("too big"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); no(new Error("bad image")); };
+    img.src = u;
+  });
 }
 function bindInventory(){
   $("invAdd").addEventListener("click", () => {
@@ -3312,6 +3348,23 @@ function bindInventory(){
     const last = $("invItems").lastElementChild; last.querySelector(".iv-name").focus();
   });
   $("invSave").addEventListener("click", invSaveItems);
+  $("invItems").addEventListener("change", async e => {                    // 選了照片：縮到 800 像素內再預覽（上傳在按「儲存」時）
+    const inp = e.target.closest(".iv-file"); if(!inp || !inp.files[0]) return;
+    const row = inp.closest(".inv-row"), out = $("invMsg");
+    try{
+      const url = await resizeImage(inp.files[0], 800);
+      row._newImg = url; row._rmImg = false;
+      const th = row.querySelector(".iv-thumb"); th.src = url; th.classList.remove("hidden"); row.querySelector(".iv-imgdel").classList.remove("hidden");
+      msg(out, "照片已選好，記得按「儲存品項與固定數量」才會生效", "ok");
+    }catch(err){ msg(out, "這張照片無法讀取，請換一張（jpg／png）", "err"); }
+    inp.value = "";
+  });
+  $("invItems").addEventListener("click", e => {
+    const b = e.target.closest(".iv-imgdel"); if(!b) return;
+    const row = b.closest(".inv-row"); row._newImg = null; row._rmImg = true;
+    const th = row.querySelector(".iv-thumb"); th.classList.add("hidden"); th.removeAttribute("src"); b.classList.add("hidden");
+    msg($("invMsg"), "已標記移除，按「儲存品項與固定數量」後生效", "ok");
+  });
   $("invItems").addEventListener("click", e => {
     const b = e.target.closest(".iv-del"); if(!b) return;
     const row = b.closest(".inv-row"), name = row.querySelector(".iv-name").value || "這個品項";
