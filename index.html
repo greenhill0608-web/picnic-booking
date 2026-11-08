@@ -486,7 +486,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AC</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AE</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -529,15 +529,16 @@
           <button class="btn" id="invSave">儲存品項與預設數量</button>
         </div>
         <div id="invMsg"></div>
-        <h3 style="margin:18px 0 6px;font-size:16px">單日調整／提早關閉</h3>
-        <div class="hint" style="margin:0 0 6px">下表是接下來開放預約的日子：「已預約／上限」。按「關閉」這天就不能再租；按「恢復預設」回到上面設定的每日數量。</div>
+        <h3 style="margin:18px 0 6px;font-size:16px">📅 每日人數與套組（日曆）</h3>
+        <div class="hint" style="margin:0 0 6px">每天顯示入園人數與套組數。點日期可看上午／下午場的細節；按「關閉」這個場次就不能再租，「恢復預設」回到上面設定的數量。</div>
         <div id="invDays"></div>
         <h3 style="margin:18px 0 6px;font-size:16px">一次設定多天</h3>
         <div class="grid2">
           <div><label for="invFrom" style="margin-top:0">從</label><input type="date" id="invFrom"></div>
           <div><label for="invTo" style="margin-top:0">到</label><input type="date" id="invTo"></div>
           <div><label for="invItem">品項</label><select id="invItem"></select></div>
-          <div><label for="invQty">當日數量</label><input type="number" min="0" id="invQty" placeholder="例如 6"></div>
+          <div><label for="invSess">場次</label><select id="invSess"><option value="">上午＋下午</option><option value="am">只有上午場</option><option value="pm">只有下午場</option></select></div>
+          <div><label for="invQty">該場次數量</label><input type="number" min="0" id="invQty" placeholder="例如 6"></div>
         </div>
         <div class="row" style="margin-top:8px">
           <button class="btn ghost small" id="invSet">套用這個數量</button>
@@ -1386,27 +1387,30 @@ const Store = {
   },
   used(date, sid){ return this.usedMap()[date + "|" + sid] || 0; },
   // 租借品項（id "set" = 野餐套組）每日數量：該日有單獨設定就用該日（0 = 當天關閉），否則用預設；null = 不限
-  stockLimit(id, date, S){
+  // 數量以「場次」為單位：鍵「日期|場次」優先；其次舊版整天設定（鍵 日期，套用到每個場次）；最後是預設（每個場次各自的預設數量）
+  stockLimit(id, date, sid, S){
     const st = ((S || this.settings()).stock || {})[id]; if(!st) return null;
-    if(st.byDate && Object.prototype.hasOwnProperty.call(st.byDate, date)) return Number(st.byDate[date]);
+    const has = k => st.byDate && Object.prototype.hasOwnProperty.call(st.byDate, k);
+    if(has(date + "|" + sid)) return Number(st.byDate[date + "|" + sid]);
+    if(has(date)) return Number(st.byDate[date]);
     return (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def);
   },
-  stockUsed(id, date){
-    if(this.api && !GH.adminToken()) return ((this._stockUsed || {})[id] || {})[date] || 0;
-    return this.all().filter(b => b.status === "confirmed" && b.date === date).reduce((n, b) => n + qtyOf(b, id), 0);
+  stockUsed(id, date, sid){
+    if(this.api && !GH.adminToken()) return ((this._stockUsed || {})[id] || {})[date + "|" + sid] || 0;
+    return this.all().filter(b => b.status === "confirmed" && b.date === date && b.session === sid).reduce((n, b) => n + qtyOf(b, id), 0);
   },
   // 還剩多少可租（own = 正在修改的那筆預約，原本佔用的算回去）；不限 = Infinity
-  stockLeft(id, date, own){
-    const lim = this.stockLimit(id, date); if(lim === null) return Infinity;
-    const mine = (own && own.status === "confirmed" && own.date === date) ? qtyOf(own, id) : 0;
-    return Math.max(0, lim - (this.stockUsed(id, date) - mine));
+  stockLeft(id, date, sid, own){
+    const lim = this.stockLimit(id, date, sid); if(lim === null) return Infinity;
+    const mine = (own && own.status === "confirmed" && own.date === date && own.session === sid) ? qtyOf(own, id) : 0;
+    return Math.max(0, lim - (this.stockUsed(id, date, sid) - mine));
   },
   remaining(date, sid, S){
     const c = dayRule(date, S || this.settings()).sessions[sid];
     return c && c.open ? Math.max(0, c.cap - this.used(date, sid)) : 0;
   },
   add(b){
-    for(const it of allItems()){ const q = qtyOf(b, it.id), l = this.stockLeft(it.id, b.date); if(q > l) return { ok:false, error:`${it.name}該日只剩 ${l} ${it.unit}` }; }
+    for(const it of allItems()){ const q = qtyOf(b, it.id), l = this.stockLeft(it.id, b.date, b.session); if(q > l) return { ok:false, error:`${it.name}該場次只剩 ${l} ${it.unit}` }; }
     const left = this.remaining(b.date, b.session);
     if(b.adults + b.children > left)
       return { ok:false, error:`該場次剩餘名額 ${left} 位，不足以預約 ${b.adults + b.children} 位` };
@@ -1790,34 +1794,35 @@ function renderStatic(){
 }
 
 // 依日期的剩餘數量重建「加購」選單；額滿／當天關閉時不能選並顯示原因
-function fillItemSelect(sel, it, date, keep, own, hintEl, noun){
-  const left = date ? Store.stockLeft(it.id, date, own) : Infinity;
+function fillItemSelect(sel, it, date, sid, keep, own, hintEl, noun){
+  const known = !!(date && sid);                // 還沒選場次就先不限制，選了場次再依該場次的數量更新
+  const left = known ? Store.stockLeft(it.id, date, sid, own) : Infinity;
   // 客人改單：本筆原本已訂的數量一定保留得住（庫存被店家調降或已滿，也不會在改車輛、備註時被默默清成 0）
-  const held = (own && own.status === "confirmed" && own.date === date) ? Math.min(it.max, qtyOf(own, it.id)) : 0;
+  const held = (own && own.status === "confirmed" && own.date === date && own.session === sid) ? Math.min(it.max, qtyOf(own, it.id)) : 0;
   const mx = Math.max(held, 0, left === Infinity ? it.max : Math.min(it.max, left));
   fillSelect(sel, 0, mx, Math.min(keep, mx), n => n === 0 ? (noun || "不加購") : `${n} ${it.unit}`);
-  sel.disabled = !!date && mx === 0;
+  sel.disabled = known && mx === 0;
   if(hintEl){
-    const lim = date ? Store.stockLimit(it.id, date) : null;
-    hintEl.textContent = (date && lim !== null) ? (left === 0 ? `⚠️ 這天的${it.name}已額滿／未開放，無法加購` : `這天${it.name}還剩 ${left} ${it.unit}`) : "";
-    hintEl.style.color = (date && lim !== null && left === 0) ? "var(--warn)" : "";
+    const lim = known ? Store.stockLimit(it.id, date, sid) : null;
+    hintEl.textContent = (known && lim !== null) ? (left === 0 ? `⚠️ 這個場次的${it.name}已額滿／未開放，無法加購` : `這個場次${it.name}還剩 ${left} ${it.unit}`) : "";
+    hintEl.style.color = (known && lim !== null && left === 0) ? "var(--warn)" : "";
   }
 }
 function renderItemSelects(){
-  const date = $("date").value, its = allItems();
+  const date = $("date").value, sid = $("session").value, its = allItems();
   if(isWdMode(date)){                       // 平日不提供餐飲：隱藏加購並歸零
     $("addonSec").classList.add("hidden");
-    fillItemSelect($("addon"), its[0], date, 0, null, $("addonStock")); $("addon").value = "0";
+    fillItemSelect($("addon"), its[0], date, sid, 0, null, $("addonStock")); $("addon").value = "0";
     $("extraItems").innerHTML = "";
     return;
   }
   $("addonSec").classList.remove("hidden");
-  fillItemSelect($("addon"), its[0], date, +$("addon").value || 0, null, $("addonStock"));
+  fillItemSelect($("addon"), its[0], date, sid, +$("addon").value || 0, null, $("addonStock"));
   const box = $("extraItems"), keep = {};
   box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
   const ex = its.slice(1);
   box.innerHTML = ex.map(it => `<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div>`).join("");
-  ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, keep[it.id] || 0, null, $("exh_" + it.id)));
+  ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, sid, keep[it.id] || 0, null, $("exh_" + it.id)));
 }
 
 // 加購商品照片：預設使用內嵌照片（單一檔案也看得到）；點一下放大，載入失敗時自動隱藏
@@ -2113,7 +2118,7 @@ function bind(){
     $("session").value = b.dataset.sid;
     $("arrival").value = "";                 // 換場次就重設為該場次預設抵達時間
     msg($("bookMsg"), "", "");
-    renderSessions(); renderArrival();
+    renderSessions(); renderArrival(); renderItemSelects(); renderPrice();
   });
 
   ["adults","children"].forEach(id => $(id).addEventListener("change", () => refreshPeople()));
@@ -2332,8 +2337,8 @@ function submitBooking(){
   if(!$("agree").checked) return msg(out, "請先勾選「我已詳閱上述注意事項」", "err");
   for(const it of allItems()){
     const q = it.id === "set" ? p.q : (p.x[it.id] || 0); if(!q) continue;
-    const l = Store.stockLeft(it.id, date);
-    if(q > l){ renderItemSelects(); renderPrice(); return msg(out, l <= 0 ? `${it.name}這天已額滿或未開放，請取消加購或改選其他日期` : `${it.name}這天只剩 ${l} ${it.unit}，請減少數量`, "err"); }
+    const l = Store.stockLeft(it.id, date, sid);
+    if(q > l){ renderItemSelects(); renderPrice(); return msg(out, l <= 0 ? `${it.name}這個場次已額滿或未開放，請取消加購或改選其他場次／日期` : `${it.name}這個場次只剩 ${l} ${it.unit}，請減少數量`, "err"); }
   }
 
   const booking = {
@@ -3063,8 +3068,8 @@ function cuPrice(e){
 function cuRender(){
   const b = Store.all().find(x => x.id === cuId); if(!b) return;
   let e = cuRead(); const S = Store.settings();
-  { const its = allItems(); fillItemSelect($("cuAddon"), its[0], e.date, e.addonQty, b, $("cuAddonStock"));
-    its.slice(1).forEach(it => fillItemSelect($("cuEx_" + it.id), it, e.date, e.extras[it.id] || 0, b, null)); e = cuRead(); }
+  { const its = allItems(); fillItemSelect($("cuAddon"), its[0], e.date, e.session, e.addonQty, b, $("cuAddonStock"));
+    its.slice(1).forEach(it => fillItemSelect($("cuEx_" + it.id), it, e.date, e.session, e.extras[it.id] || 0, b, null)); e = cuRead(); }
   // 場次選項：顯示剩餘名額（本筆原本佔用的名額算回去）
   const info = e.date ? dayInfo(e.date, S) : null;
   const keepSame = e.date === b.date;
@@ -3183,7 +3188,7 @@ function invRowHtml(it, def){
       <div><label>單價（元）</label><input class="iv-price" type="number" min="0" value="${esc(it.price)}"${dis}></div>
       <div><label>單筆預約最多</label><input class="iv-max" type="number" min="1" max="20" value="${esc(it.max)}"${dis}></div>
     </div>
-    <label>每日數量（留空 = 不限）</label><input class="iv-def" type="number" min="0" placeholder="不限" value="${def === null ? "" : esc(def)}">
+    <label>預設數量（每個場次各自計算，留空 = 不限）</label><input class="iv-def" type="number" min="0" placeholder="不限" value="${def === null ? "" : esc(def)}">
     ${set ? "" : `<button class="btn ghost small iv-del" style="margin-top:6px">刪除這個品項</button>`}
   </div>`;
 }
@@ -3193,21 +3198,46 @@ function renderInventory(){
   $("invItem").innerHTML = allItems().map(it => `<option value="${esc(it.id)}">${esc(it.name)}</option>`).join("");
   renderInvDays();
 }
+let invMonth = "", invSel = "";
 function renderInvDays(){
-  const S = Store.settings(), its = allItems(), t = todayStr(), n = Math.min(60, +S.maxAdvanceDays || 21);
-  const rows = [];
-  for(let i = 0; i <= n; i++){
-    const d = addDaysStr(t, i), info = dayRule(d, S);
-    if(!Object.values(info.sessions).some(x => x.open)) continue;
-    const cells = its.map(it => {
-      const lim = Store.stockLimit(it.id, d, S), used = Store.stockUsed(it.id, d), ov = Object.prototype.hasOwnProperty.call(stockOf(S, it.id).byDate, d);
-      const full = lim !== null && used >= lim, txt = lim === null ? `${used} / 不限` : `${used} / ${lim}`;
-      const btn = ov ? `<button class="btn ghost small iv-reset" data-id="${esc(it.id)}" data-d="${d}">恢復預設</button>` : (lim === 0 ? "" : `<button class="btn ghost small iv-close" data-id="${esc(it.id)}" data-d="${d}">關閉</button>`);
-      return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:4px"><span style="${lim === 0 ? "color:#b3261e;font-weight:700" : full ? "color:#b3261e" : ""}">${esc(it.name)} ${txt}${lim === 0 ? "（已關閉）" : full ? "（已額滿）" : ""}</span>${btn}</div>`;
-    }).join("");
-    rows.push(`<div style="border-bottom:1px solid var(--line);padding:6px 0"><b>${esc(showDate(d))}</b>${cells}</div>`);
+  // 日曆式：每天顯示入園人數與套組數；點某一天看上午／下午場的細節，並可個別關閉場次的數量
+  const S = Store.settings(), its = allItems(), t = todayStr();
+  if(!invMonth) invMonth = t.slice(0, 7);
+  const [y, m] = invMonth.split("-").map(Number), first = new Date(y, m - 1, 1), nd = new Date(y, m, 0).getDate();
+  const per = {};                                   // 日期 → { 場次 → { p: 入園人數, q: 套組數 } }
+  Store.all().filter(b => b.status === "confirmed").forEach(b => {
+    const o = ((per[b.date] = per[b.date] || {})[b.session] = per[b.date][b.session] || { p: 0, q: 0 });
+    if(!b.lodging) o.p += (+b.adults || 0) + (+b.children || 0);
+    o.q += (+b.addonQty || 0);
+  });
+  const heads = ["日","一","二","三","四","五","六"].map(x => `<div style="text-align:center;font-size:13px;color:var(--muted)">${x}</div>`).join("");
+  let cells = ""; for(let i = 0; i < first.getDay(); i++) cells += "<div></div>";
+  for(let d = 1; d <= nd; d++){
+    const ds = `${invMonth}-${String(d).padStart(2, "0")}`, info = dayRule(ds, S), open = Object.values(info.sessions).some(x => x.open);
+    const o = per[ds] || {}, p = Object.values(o).reduce((n, x) => n + x.p, 0), q = Object.values(o).reduce((n, x) => n + x.q, 0);
+    const off = !open && !p && !q;
+    cells += `<button type="button" data-cal="${ds}" style="padding:4px 2px;min-height:62px;border-radius:8px;border:${invSel === ds ? "2px solid var(--green,#2f7d4f)" : "1px solid var(--line)"};background:${ds === t ? "#fff8d6" : off ? "#f1f1ee" : "#fff"};color:${off ? "#aaa" : "inherit"};font:inherit;line-height:1.25;cursor:pointer">
+      <div style="font-weight:700">${d}</div>${p || q ? `<div style="font-size:13px">👥${p}</div><div style="font-size:13px;color:#a05a00">🧺${q}</div>` : open ? `<div style="font-size:12px;color:var(--muted)">開放</div>` : ""}</button>`;
   }
-  $("invDays").innerHTML = rows.length ? rows.join("") : `<div class="hint">目前沒有開放預約的日子</div>`;
+  let detail = `<div class="hint" style="margin-top:8px">點日曆上的日期，可看當天上午／下午的人數與套組，也能關閉或調整該場次的數量。</div>`;
+  if(invSel && invSel.slice(0, 7) === invMonth){
+    const d = invSel, info = dayRule(d, S), o = per[d] || {};
+    const secs = SESSIONS.map(x => {
+      const r = info.sessions[x.id], u = o[x.id] || { p: 0, q: 0 };
+      if(!(r && r.open) && !u.p && !u.q) return `<div style="margin-top:8px"><b>${esc(x.label)}</b>　<span style="color:var(--muted)">未開放</span></div>`;
+      const rows = its.map(it => {
+        const k = d + "|" + x.id, lim = Store.stockLimit(it.id, d, x.id, S), used = Store.stockUsed(it.id, d, x.id), by = stockOf(S, it.id).byDate, ov = Object.prototype.hasOwnProperty.call(by, k) || Object.prototype.hasOwnProperty.call(by, d);
+        const full = lim !== null && used >= lim, txt = lim === null ? `${used} / 不限` : `${used} / ${lim}`;
+        const btn = ov ? `<button class="btn ghost small iv-reset" data-id="${esc(it.id)}" data-d="${d}" data-s="${x.id}">恢復預設</button>` : (lim === 0 ? "" : `<button class="btn ghost small iv-close" data-id="${esc(it.id)}" data-d="${d}" data-s="${x.id}">關閉</button>`);
+        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:4px"><span style="${lim === 0 ? "color:#b3261e;font-weight:700" : full ? "color:#b3261e" : ""}">${esc(it.name)} ${txt}${lim === 0 ? "（已關閉）" : full ? "（已額滿）" : ""}</span>${btn}</div>`;
+      }).join("");
+      return `<div style="margin-top:10px"><b>${esc(x.label)}</b>　入園 ${u.p}${r && r.open ? ` / ${r.cap} 位` : " 位"}　套組 ${u.q} 組${rows}</div>`;
+    }).join("");
+    detail = `<div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px;background:#fbfdfb"><b>${esc(showDate(d))}</b>${secs}</div>`;
+  }
+  $("invDays").innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0"><button type="button" class="btn ghost small" data-calnav="-1">‹ 上個月</button><b>${y} 年 ${m} 月</b><button type="button" class="btn ghost small" data-calnav="1">下個月 ›</button></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${heads}${cells}</div>
+    <div class="hint" style="margin-top:6px">👥 入園人數（不含住宿／互惠客）　🧺 野餐套組數（含住宿／互惠客）</div>${detail}`;
 }
 const addDaysStr = (s, n) => { const d = new Date(s + "T00:00:00"); d.setDate(d.getDate() + n); return fmt(d); };
 function invCommit(S, text){
@@ -3216,13 +3246,15 @@ function invCommit(S, text){
   Store.saveSettings(S); renderInventory(); refreshBook();
   if(text) toast(text, "ok");
 }
-function invSetDays(id, dates, qty){          // qty: 數字 = 設定當日數量；null = 恢復預設
+function invSetDays(id, dates, qty, sids){     // qty: 數字 = 設定該場次數量；null = 恢復預設；sids = 要設定的場次（預設兩個場次）
   const S = Store.settings(); S.stock = JSON.parse(JSON.stringify(S.stock || {}));
   const st = S.stock[id] = Object.assign({ def: null, byDate: {} }, S.stock[id] || {}); st.byDate = st.byDate || {};
-  const warn = [];
-  dates.forEach(d => {
-    if(qty === null) delete st.byDate[d]; else { st.byDate[d] = qty; const u = Store.stockUsed(id, d); if(u > qty) warn.push(`${showDate(d)} 已有 ${u}`); }
-  });
+  const warn = [], ss = (sids && sids.length) ? sids : SESSIONS.map(x => x.id);
+  dates.forEach(d => ss.forEach(sid => {
+    const k = d + "|" + sid, nm = (sessionById(sid) || {}).label || sid;
+    if(qty === null){ delete st.byDate[k]; if(Object.prototype.hasOwnProperty.call(st.byDate, d)){ const old = st.byDate[d]; delete st.byDate[d]; SESSIONS.forEach(x => { if(x.id !== sid && !Object.prototype.hasOwnProperty.call(st.byDate, d + "|" + x.id)) st.byDate[d + "|" + x.id] = old; }); } }   // 舊版整天設定：只恢復這個場次，另一個場次保留原數量
+    else { st.byDate[k] = qty; const u = Store.stockUsed(id, d, sid); if(u > qty) warn.push(`${showDate(d)} ${nm}已有 ${u}`); }
+  }));
   const it = allItems().find(x => x.id === id);
   invCommit(S);
   return { warn, it };
@@ -3239,7 +3271,7 @@ function invRange(mode){
     const raw = $("invQty").value.trim(); qty = raw === "" ? NaN : Number(raw);
     if(!Number.isInteger(qty) || qty < 0 || qty > 9999) return msg(out, "請輸入 0 以上的整數數量", "err");
   }
-  const r = invSetDays(id, dates, qty);
+  const sv = $("invSess").value, r = invSetDays(id, dates, qty, sv ? [sv] : null);
   msg(out, `✔ 已${qty === null ? "恢復預設" : qty === 0 ? "關閉" : "設定為 " + qty + " " + r.it.unit}：${r.it.name}　共 ${dates.length} 天` + (r.warn.length ? `。提醒：${r.warn.join("、")} ${r.it.unit}的預約，已成立的預約不會被取消。` : ""), "ok");
 }
 function invSaveItems(){
@@ -3274,9 +3306,11 @@ function bindInventory(){
     row.remove(); msg($("invMsg"), "已從清單移除，請按「儲存品項與預設數量」才會生效", "ok");
   });
   $("invDays").addEventListener("click", e => {
+    const nav = e.target.closest("[data-calnav]"); if(nav){ const [y, m] = invMonth.split("-").map(Number), n = new Date(y, m - 1 + (+nav.dataset.calnav), 1); invMonth = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`; invSel = ""; return renderInvDays(); }
+    const cal = e.target.closest("[data-cal]"); if(cal){ invSel = cal.dataset.cal; return renderInvDays(); }
     const b = e.target.closest("button[data-d]"); if(!b) return;
-    const close = b.classList.contains("iv-close"), r = invSetDays(b.dataset.id, [b.dataset.d], close ? 0 : null);
-    toast(close ? `已關閉 ${showDate(b.dataset.d)} 的${r.it.name}` + (r.warn.length ? `（${r.warn[0]} ${r.it.unit}的預約仍保留）` : "") : `已恢復 ${showDate(b.dataset.d)} 的${r.it.name}預設數量`, "ok");
+    const close = b.classList.contains("iv-close"), r = invSetDays(b.dataset.id, [b.dataset.d], close ? 0 : null, [b.dataset.s]);
+    toast(close ? `已關閉 ${showDate(b.dataset.d)} ${(sessionById(b.dataset.s) || {}).label || ""}的${r.it.name}` + (r.warn.length ? `（${r.warn[0]} ${r.it.unit}的預約仍保留）` : "") : `已恢復 ${showDate(b.dataset.d)} ${(sessionById(b.dataset.s) || {}).label || ""}的${r.it.name}預設數量`, "ok");
   });
   $("invSet").addEventListener("click", () => invRange("set"));
   $("invClose").addEventListener("click", () => invRange("close"));
