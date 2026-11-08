@@ -486,7 +486,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AE</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AG</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -529,9 +529,6 @@
           <button class="btn" id="invSave">儲存品項與預設數量</button>
         </div>
         <div id="invMsg"></div>
-        <h3 style="margin:18px 0 6px;font-size:16px">📅 每日人數與套組（日曆）</h3>
-        <div class="hint" style="margin:0 0 6px">每天顯示入園人數與套組數。點日期可看上午／下午場的細節；按「關閉」這個場次就不能再租，「恢復預設」回到上面設定的數量。</div>
-        <div id="invDays"></div>
         <h3 style="margin:18px 0 6px;font-size:16px">一次設定多天</h3>
         <div class="grid2">
           <div><label for="invFrom" style="margin-top:0">從</label><input type="date" id="invFrom"></div>
@@ -546,6 +543,12 @@
           <button class="btn ghost small" id="invReset">恢復預設</button>
         </div>
         <div id="invRangeMsg"></div>
+      </div>
+
+      <div class="card" id="calCard">
+        <h2>📅 預約日曆（每天人數・套組）</h2>
+        <div class="hint" style="margin:0 0 6px">每天顯示入園人數與套組數。點日期可看上午／下午場的細節；按「關閉」這個場次就不能再租，「恢復預設」回到「租借品項與數量」設定的數量。</div>
+        <div id="invDays"></div>
       </div>
 
       <div class="card">
@@ -1393,6 +1396,7 @@ const Store = {
     const has = k => st.byDate && Object.prototype.hasOwnProperty.call(st.byDate, k);
     if(has(date + "|" + sid)) return Number(st.byDate[date + "|" + sid]);
     if(has(date)) return Number(st.byDate[date]);
+    if(st.defBy && Object.prototype.hasOwnProperty.call(st.defBy, sid)) return Number(st.defBy[sid]);
     return (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def);
   },
   stockUsed(id, date, sid){
@@ -2428,7 +2432,7 @@ function bookingCard(b, admin){
   const upcoming = b.date >= todayStr();
   const ses = sessionById(sessionOf(b));
   const hist = Array.isArray(b.history) ? b.history : [];
-  const needAck = admin && !cancelled && b.needAck && !b.ackAt;       // 新預約還沒按「確認」
+  const needAck = false;       // 新預約還沒按「確認」
   return `
   <div class="booking ${cancelled?"cancelled":""}"${needAck ? ' style="border-left-color:#e0a030;background:#fff8e6"' : ""}>
     <div class="top"><span>${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}</span><span>${cancelled ? "已取消" : needAck ? '<b style="color:#b36b00">🔔 待你確認</b>' : "已確認"}</span></div>
@@ -3177,8 +3181,9 @@ function bindCustomerEdit(){
 }
 /* ========= 後台：租借品項與每日數量 ========= */
 const newItemId = () => "x" + Date.now().toString(36).slice(-7);
-const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), byDate: Object.assign({}, st.byDate || {}) }; };
-function invRowHtml(it, def){
+const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), defBy: Object.assign({}, st.defBy || {}), byDate: Object.assign({}, st.byDate || {}) }; };
+function invRowHtml(it, sk){
+  const defOf = sid => (sk.defBy && Object.prototype.hasOwnProperty.call(sk.defBy, sid)) ? sk.defBy[sid] : sk.def;
   const set = !!it.isSet, dis = set ? ` disabled title="套組的名稱、單價、折抵、訂金請到「網站內容」修改"` : "";
   return `<div class="inv-row" data-id="${esc(it.id)}" style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px">
     <b>${set ? "🧺 " : ""}${esc(it.name || "新品項")}</b>${set ? `<small style="color:var(--muted)">（名稱與價格在「網站內容」修改）</small>` : ""}
@@ -3188,13 +3193,14 @@ function invRowHtml(it, def){
       <div><label>單價（元）</label><input class="iv-price" type="number" min="0" value="${esc(it.price)}"${dis}></div>
       <div><label>單筆預約最多</label><input class="iv-max" type="number" min="1" max="20" value="${esc(it.max)}"${dis}></div>
     </div>
-    <label>預設數量（每個場次各自計算，留空 = 不限）</label><input class="iv-def" type="number" min="0" placeholder="不限" value="${def === null ? "" : esc(def)}">
+    <label>固定數量（每個場次各自一個數字，留空 = 不限）</label>
+    <div class="grid2">${SESSIONS.map(x => { const v = defOf(x.id); return `<div><label style="margin-top:0">${esc(x.label)}</label><input class="iv-defs" data-sid="${esc(x.id)}" type="number" min="0" placeholder="不限" value="${v === null || v === undefined ? "" : esc(v)}"></div>`; }).join("")}</div>
     ${set ? "" : `<button class="btn ghost small iv-del" style="margin-top:6px">刪除這個品項</button>`}
   </div>`;
 }
 function renderInventory(){
   const S = Store.settings();
-  $("invItems").innerHTML = allItems().map(it => invRowHtml(it, stockOf(S, it.id).def)).join("");
+  $("invItems").innerHTML = allItems().map(it => invRowHtml(it, stockOf(S, it.id))).join("");
   $("invItem").innerHTML = allItems().map(it => `<option value="${esc(it.id)}">${esc(it.name)}</option>`).join("");
   renderInvDays();
 }
@@ -3277,9 +3283,16 @@ function invRange(mode){
 function invSaveItems(){
   const out = $("invMsg"), S = Store.settings(), items = [], stock = JSON.parse(JSON.stringify(S.stock || {}));
   for(const row of document.querySelectorAll("#invItems .inv-row")){
-    const id = row.dataset.id, q = c => row.querySelector(c), raw = q(".iv-def").value.trim(), def = raw === "" ? null : Number(raw);
-    if(def !== null && (!Number.isInteger(def) || def < 0 || def > 9999)) return msg(out, "每日數量請輸入 0 以上的整數，或留空代表不限", "err");
-    stock[id] = Object.assign({ byDate: {} }, stock[id] || {}, { def });
+    const id = row.dataset.id, q = c => row.querySelector(c), defBy = {};
+    for(const inp of row.querySelectorAll(".iv-defs")){
+      const raw = inp.value.trim(); if(raw === "") continue;
+      const v = Number(raw); if(!Number.isInteger(v) || v < 0 || v > 9999) return msg(out, "固定數量請輸入 0 以上的整數，或留空代表不限", "err");
+      defBy[inp.dataset.sid] = v;
+    }
+    // def（舊版相容欄位）：只有每個場次都填了同一個數字才存；有場次留空代表該場次不限
+    const vs = SESSIONS.map(x => defBy[x.id]);
+    stock[id] = Object.assign({ byDate: {} }, stock[id] || {}, { def: null, defBy: Object.fromEntries(Object.entries(defBy)) });
+    if(vs.every(v => v === undefined)) stock[id].defBy = {};
     if(id === "set") continue;
     const name = q(".iv-name").value.trim(), unit = q(".iv-unit").value.trim() || "個", price = Number(q(".iv-price").value), max = Number(q(".iv-max").value);
     if(!name) return msg(out, "請填寫品項名稱", "err");
@@ -3767,20 +3780,9 @@ function renderSmsBox(){
     + `</details>`;
 }
 const pendingAck = () => Store.all().filter(b => b.needAck && !b.ackAt && b.status === "confirmed").sort((x, y) => String(x.createdAt).localeCompare(String(y.createdAt)));
-function renderAck(){
+function renderAck(){          // 不再有「新預約等你確認」；這裡只更新簡訊邀請區塊
   renderSmsBox(); renderBulk();
-  const box = $("ackBox"); if(!box) return;
-  const L = pendingAck();
-  box.classList.toggle("hidden", !L.length);
-  if(!L.length){ box.innerHTML = ""; return; }
-  const ago = t => { const m = Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 60000)); return m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.floor(m / 60)} 小時前` : `${Math.floor(m / 1440)} 天前`; };
-  box.innerHTML = `<div class="card ack-card"><h2>🔔 有 ${L.length} 筆新預約等你確認</h2>`
-    + `<div class="hint" style="margin:0 0 8px">按「確認」代表你已經看到。超過 8 小時沒確認，系統會再寄 email 提醒你。</div>`
-    + L.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="ack-row"><div class="ack-info"><b>${esc(b.name)}</b>　${esc(showDate(b.date))} ${esc(ses ? ses.label : "")}<br>`
-      + `大人 ${b.adults}・孩童 ${b.children}${petsOf(b) ? `・毛小孩 ${petsOf(b)}` : ""}${b.addonQty ? `・套組 ${b.addonQty}` : ""}　<span style="color:var(--muted)">${esc(ago(b.createdAt))}送出</span></div>`
-      + `<button class="btn ack-btn" data-ack="${esc(b.id)}">確認</button></div>`; }).join("")
-    + (L.length > 1 ? `<button class="btn ghost" id="ackAll" style="margin-top:8px">全部確認（${L.length} 筆）</button>` : "")
-    + `</div>`;
+  const box = $("ackBox"); if(box){ box.classList.add("hidden"); box.innerHTML = ""; }
 }
 async function ackBookings(ids){
   const at = new Date().toISOString();
