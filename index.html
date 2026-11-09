@@ -235,6 +235,8 @@
   .addon-pic figcaption small{display:inline;font-size:12px}
   .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;cursor:zoom-out}
   .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  .done-event{margin:12px 0;padding:12px 14px;border:1px solid #e6c875;border-radius:12px;background:#fff9e6;text-align:left;line-height:1.7;font-size:16px;word-break:break-word}
+  .done-event a{color:#0b6b3a;font-weight:700;text-decoration:underline}
   .item-thumb{width:96px;height:96px;object-fit:cover;border-radius:10px;display:block;margin:10px 0 0;cursor:zoom-in;border:1px solid var(--line)}
 
   /* 月曆 */
@@ -440,6 +442,7 @@
           <div class="msg info petday hidden" id="donePetDay"></div>
           <div class="done-mail hidden" id="doneMail"></div>
           <div class="done-line hidden" id="doneLine"></div>
+          <div class="done-event hidden" id="doneEvent"></div>
           <div class="done-shot">📸 請<b>截圖留存</b>此畫面作為憑證<br><span>入園時請出示；查詢或取消需要手機號碼與代號</span></div>
           <button class="btn" id="againBtn">我已截圖，關閉</button>
         </div>
@@ -487,7 +490,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AJ</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AK</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -735,8 +738,11 @@
         <label for="ctLineUrl">官方 LINE 連結</label><input id="ctLineUrl" type="text" placeholder="https://lin.ee/…">
         <div style="margin-top:12px;padding:10px;border:1px solid #06c755;border-radius:10px;background:#f0fff5">
           <b>💬 預約成功／更新訊息：最後加一段自訂內容</b>
+          <div class="hint" style="margin:4px 0"><b>預約完成畫面</b>（客人送出預約後看到的頁面）預設也會顯示同一段，網址會變成可點的連結；想讓畫面上顯示不同內容，填在下面「預約完成畫面專用」。</div>
           <div class="hint" style="margin:4px 0">客人預約成功、以及預約被更新時，LINE 訊息最後會多出這一段（取消預約不會加）。適合放活動、公告、連結。留空 = 不加。</div>
           <textarea id="ctLineExtra" rows="4" maxlength="600" placeholder="例：🎁 限時活動：…&#10;活動連結：https://…"></textarea>
+          <label for="ctDoneExtra" style="margin-top:8px">預約完成畫面專用（留空 = 與上面相同）</label>
+          <textarea id="ctDoneExtra" rows="3" maxlength="600"></textarea>
         </div>
         <div style="margin-top:12px;padding:10px;border:1px solid #06c755;border-radius:10px;background:#f0fff5">
           <b>💬 前一天自動提醒（LINE）</b>
@@ -1149,8 +1155,8 @@ const CONTENT_DEFAULTS = JSON.parse(JSON.stringify({
   siteName: CONFIG.siteName, adultPrice: CONFIG.adultPrice, adultCredit: CONFIG.adultCredit, creditNote: CONFIG.creditNote,
   childPrice: CONFIG.childPrice, childNote: CONFIG.childNote, weekdayOn: CONFIG.weekdayOn, weekdayPrice: CONFIG.weekdayPrice, weekdayNote: CONFIG.weekdayNote, petFee: CONFIG.petFee, petFeeFrom: CONFIG.petFeeFrom, maxPets: CONFIG.maxPets, maxCars: CONFIG.maxCars,
   announce: CONFIG.announce, petRule: CONFIG.petRule, petDayRule: CONFIG.petDayRule, petDayNote: CONFIG.petDayNote, petDayMinAge: CONFIG.petDayMinAge, infoLines: CONFIG.infoLines, infoFull: null, notices: CONFIG.notices, footer: CONFIG.footer,
-  lineRemind: { on:true, text:"" }, lineExtra: "", checkinOn: false, addon: CONFIG.addon, sessions: CONFIG.sessions }));
-const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","weekdayOn","weekdayPrice","weekdayNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce","lineRemind","lineExtra","checkinOn"];
+  lineRemind: { on:true, text:"" }, lineExtra: "", doneExtra: "", checkinOn: false, addon: CONFIG.addon, sessions: CONFIG.sessions }));
+const CONTENT_SIMPLE = ["siteName","adultPrice","adultCredit","creditNote","childPrice","childNote","weekdayOn","weekdayPrice","weekdayNote","petFee","petFeeFrom","maxPets","maxCars","petRule","petDayRule","petDayNote","petDayMinAge","infoLines","infoFull","notices","footer","announce","lineRemind","lineExtra","doneExtra","checkinOn"];
 function applyContent(){
   const c = (Store.settings().content) || {};
   setTimeout(() => { try{ syncCheckinBtn(); }catch(e){} }, 0);
@@ -2393,6 +2399,9 @@ function submitBooking(){
   $("doneMail").classList.toggle("hidden", !$("doneMail").textContent);
   const lb = lineBindHtml(r.booking && r.booking.lineToken, r.booking && r.booking.lineBound);
   $("doneLine").innerHTML = lb; $("doneLine").classList.toggle("hidden", !lb);
+  const ev = String(CONFIG.doneExtra || CONFIG.lineExtra || "").trim();      // 預約完成畫面的活動／公告（網址自動變成可點連結）
+  $("doneEvent").innerHTML = ev ? esc(ev).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, "<br>") : "";
+  $("doneEvent").classList.toggle("hidden", !ev);
   $("bookForm").classList.add("hidden");
   $("bookDone").classList.remove("hidden");
   document.body.style.overflow = "hidden"; $("bookDone").scrollTop = 0;
@@ -3760,7 +3769,7 @@ function renderContent(){
   v("ctAddName", A.name); v("ctAddPrice", A.price); v("ctAddUnit", A.unit); v("ctAddMax", A.max); v("ctAddDisc", A.adultDiscount || 0); v("ctAddDiscN", A.discountPerSet || 0); v("ctAddImage", A.image || ""); v("ctAddNote", A.imageNote || ""); v("ctAddDesc", A.desc || ""); v("ctDepFrom", A.depositFrom || 0); v("ctDepPer", A.depositPerSet || 0); v("ctBank", A.bankText || ""); v("ctAcct", A.account || ""); v("ctHolder", A.holder || ""); v("ctLineUrl", A.lineUrl || ""); v("ctLineId", A.lineId || "");
   $("ctCheckinOn").checked = CONFIG.checkinOn === true;
   $("ctWdOn").checked = CONFIG.weekdayOn !== false; v("ctWdPrice", CONFIG.weekdayPrice); v("ctWdNote", CONFIG.weekdayNote);
-  v("ctLineExtra", CONFIG.lineExtra || "");
+  v("ctLineExtra", CONFIG.lineExtra || ""); v("ctDoneExtra", CONFIG.doneExtra || "");
   { const lr = CONFIG.lineRemind || {}; $("ctLineRemOn").checked = lr.on !== false; v("ctLineRemText", lr.text || ""); }
   v("ctPetFee", CONFIG.petFee); v("ctPetFeeFrom", CONFIG.petFeeFrom); v("ctMaxPets", CONFIG.maxPets); v("ctMaxCars", CONFIG.maxCars);
   { const el = $("ctInfo"), full = Array.isArray(CONFIG.infoFull); infoEditorFill(full ? CONFIG.infoFull : autoInfoTemplate(), !full); }
@@ -3794,7 +3803,7 @@ function saveContent(){
     adultPrice:n("ctAdultPrice"), adultCredit:n("ctAdultCredit"), childPrice:n("ctChildPrice"),
     childNote:t("ctChildNote"), creditNote:t("ctCreditNote"),
     petFee:n("ctPetFee"), petFeeFrom:t("ctPetFeeFrom"), maxPets:n("ctMaxPets"), maxCars:n("ctMaxCars"),
-    lineExtra:t("ctLineExtra"), petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), lineRemind:{ on:$("ctLineRemOn").checked, text:t("ctLineRemText") }, checkinOn:$("ctCheckinOn").checked, weekdayOn:$("ctWdOn").checked, weekdayPrice:n("ctWdPrice"), weekdayNote:t("ctWdNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
+    lineExtra:t("ctLineExtra"), doneExtra:t("ctDoneExtra"), petRule:t("ctPetRule"), petDayRule:t("ctPetDayRule"), petDayNote:t("ctPetDayNote"), petDayMinAge:n("ctPetDayMinAge"), lineRemind:{ on:$("ctLineRemOn").checked, text:t("ctLineRemText") }, checkinOn:$("ctCheckinOn").checked, weekdayOn:$("ctWdOn").checked, weekdayPrice:n("ctWdPrice"), weekdayNote:t("ctWdNote"), announce:CONFIG.announce, infoLines:CONFIG.infoLines, infoFull:($("ctInfo").dataset.auto === "1" && $("ctInfo").value === $("ctInfo").dataset.orig) ? null : infoEditorLines(), notices:lines("ctNotices"), footer:t("ctFooter"), siteName:t("ctSiteName"),
     addon:{ name:t("ctAddName"), price:n("ctAddPrice"), unit:t("ctAddUnit"), max:n("ctAddMax"), adultDiscount:n("ctAddDisc"), discountPerSet:n("ctAddDiscN"), image:t("ctAddImage"), imageNote:t("ctAddNote"), desc:t("ctAddDesc"),
       depositFrom:n("ctDepFrom"), depositPerSet:n("ctDepPer"), bankText:t("ctBank"), account:t("ctAcct"), holder:t("ctHolder"), lineUrl:t("ctLineUrl"), lineId:t("ctLineId") },
     sessions:{}
