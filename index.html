@@ -296,6 +296,7 @@
   .stat-sess .h{font-weight:700}
   .stat-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px dashed var(--line);margin-top:4px}
 </style>
+<style>#announceBox a,#noticeBox a,#infoBox a{color:#0b6b3a;font-weight:700;text-decoration:underline;word-break:break-all}</style>
 </head>
 <body>
 
@@ -490,7 +491,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AK</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AL</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -1933,9 +1934,9 @@ function renderInfo(S){
     return String(l).split("{場次}").join(hoursSummary(S)).split("{期間}").join(`${mn} ～ ${mx}`).split("{天數}").join(S.maxAdvanceDays);
   };
   const lines = (Array.isArray(CONFIG.infoFull) ? CONFIG.infoFull : autoInfoTemplate()).map(fill).filter(l => l.trim() !== "");
-  $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + lines.map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
+  $("infoBox").innerHTML = "<b>入園資訊</b><ul>" + lines.map(l => `<li>${linkify(l)}</li>`).join("") + "</ul>";
   refreshPeople();
-  $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.filter(l => !String(l).includes("{max}")).map(l => `<li>${esc(l)}</li>`).join("") + "</ul>";
+  $("noticeBox").innerHTML = "<ul>" + CONFIG.notices.filter(l => !String(l).includes("{max}")).map(l => `<li>${linkify(l)}</li>`).join("") + "</ul>";
 }
 
 function renderCalendar(){
@@ -3995,11 +3996,12 @@ function exportStatsPdf(){
   window.print();
 }
 
+function linkify(t){ return esc(t).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`); }
 /* ========= 預約頁頂端：活動公告 ========= */
 function renderAnnounce(){
   const box = $("announceBox"); if(!box) return;
   const a = Object.assign({ on:true, title:"活動公告", auto:true, lines:[] }, CONFIG.announce || {});
-  const items = (Array.isArray(a.lines) ? a.lines : []).map(x => String(x).trim()).filter(Boolean).map(x => esc(x));
+  const items = (Array.isArray(a.lines) ? a.lines : []).map(x => String(x).trim()).filter(Boolean).map(x => linkify(x));
   if(a.auto){
     const t = todayStr(), days = Store.petDays().filter(d => d >= t && !isNoPetDay(d)).sort().slice(0, 6);
     if(days.length) items.unshift(`🐾 近期毛小孩野餐日：${days.map(d => esc(`${+d.slice(5, 7)}/${+d.slice(8)}（${WEEK[wdOf(d)]}）`)).join("、")}`);
