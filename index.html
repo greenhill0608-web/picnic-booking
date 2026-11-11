@@ -395,7 +395,7 @@
       <div id="addonDesc" class="hint hidden" style="margin:2px 0 6px;color:var(--text,#333);font-weight:600"></div>
       <select id="addon"></select>
       <div class="hint" id="addonStock"></div>
-      <button type="button" class="btn ghost hidden" id="snackBtn" style="margin-top:8px">🍱 野餐套組已額滿，查看單點輕食</button>
+      <button type="button" class="btn ghost hidden" id="snackBtn" style="margin-top:8px">🍱 野餐套組已額滿，點這裡看單點輕食</button>
       <div id="extraItems"></div>
       </div>
 
@@ -495,7 +495,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AN</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AO</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -917,6 +917,7 @@
       </div>
       <div class="hint" id="kStat"></div>
       <div id="kitList" style="margin-top:10px"></div>
+      <div id="snackMon" style="margin-top:18px"></div>
     </div>
   </section>
 
@@ -1852,9 +1853,6 @@ function renderItemSelects(){
   const snacks = ex.filter(it => it.snack && Store.stockLeft(it.id, date, sid, null) > 0);
   const sb = $("snackBtn");
   sb.classList.toggle("hidden", !(setFull && snacks.length));
-  if(!(setFull && snacks.length)){ window._snackKey = ""; return; }
-  const key = date + "|" + sid;
-  if(window._snackKey !== key){ window._snackKey = key; openSnackPopup(snacks); }
 }
 document.addEventListener("click", e => { if(e.target && e.target.id === "snackBtn"){ const d = $("date").value, sd = $("session").value; openSnackPopup(extraItems().filter(it => it.snack && Store.stockLeft(it.id, d, sd, null) > 0)); } });
 function openSnackPopup(snacks){
@@ -2706,6 +2704,19 @@ function sendPickup(btn){
     renderKit(); renderWalk();
   });
 }
+function renderSnackMon(){
+  const box = $("snackMon"); if(!box) return;
+  const sn = extraItems().filter(it => it.snack), ids = new Set(sn.map(it => it.id));
+  if(!sn.length){ box.innerHTML = ""; return; }
+  const tdy = todayStr();
+  const rows = Store.all().filter(b => b.status === "confirmed" && b.date >= tdy && sn.some(it => qtyOf(b, it.id) > 0))
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.arrival || "").localeCompare(String(b.arrival || "")));
+  const tot = sn.map(it => ({ it, n: rows.reduce((s, b) => s + qtyOf(b, it.id), 0) })).filter(x => x.n > 0);
+  const txt = b => sn.filter(it => qtyOf(b, it.id) > 0).map(it => `${esc(it.name)} ${qtyOf(b, it.id)} ${esc(it.unit)}`).join("・");
+  box.innerHTML = `<div style="border-top:2px dashed var(--line);padding-top:12px"><b>🍱 單點輕食預約</b><span style="color:var(--muted)">（今天以後，${rows.length} 筆）</span>
+    ${tot.length ? `<div class="hint" style="margin:6px 0">合計：${tot.map(x => `${esc(x.it.name)} ${x.n} ${esc(x.it.unit)}`).join("、")}</div>` : ""}
+    ${rows.length ? rows.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="kit-row"><div class="kit-name" style="cursor:default"><span class="nm">${esc(b.name)}</span></div><div class="kit-meta">${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "")}</div><div style="font-weight:700;margin-top:4px">${txt(b)}</div><div style="margin-top:4px">📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</div></div>`; }).join("") : `<div class="hint">目前沒有人預約單點輕食</div>`}</div>`;
+}
 function renderKit(){
   if(!$("kitList")) return;
   const logged = isAdminLogged();
@@ -2723,6 +2734,7 @@ function renderKit(){
   if(flt === "unpaid") list = list.filter(b => !b.lodging && depositDue(b.addonQty || 0) > 0 && !kitOf(b).depositPaid);
   if(flt === "dep") list = list.filter(b => { const k = kitOf(b); return k.deposit > 0 && !k.depositReturned; });
   list.sort((a, b) => a.date.localeCompare(b.date) || a.arrival.localeCompare(b.arrival));
+  renderSnackMon();
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
   const paidSum = list.reduce((n, b) => n + (!b.lodging && kitOf(b).depositPaid ? depositDue(b.addonQty || 0) : 0), 0);
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}；今天以後尚未退還的押金合計 ${money(held)}` + (paidSum ? `；已收訂金合計 ${money(paidSum)}（結帳需扣除）` : "");
