@@ -495,7 +495,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AO</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AP</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -1848,7 +1848,7 @@ function renderItemSelects(){
   const known0 = !!(date && (sid || Store.stockMode("set") === "day")), setFull = known0 && Store.stockLeft("set", date, sid, null) <= 0;
   box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
   const ex = its.slice(1);
-  box.innerHTML = ex.map(it => `<div class="ex-wrap${it.snack && !setFull && !(keep[it.id] > 0) ? " hidden" : ""}" data-snack="${it.snack ? 1 : 0}">${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div></div>`).join("");
+  box.innerHTML = ex.map(it => `<div class="ex-wrap${it.snack && !(keep[it.id] > 0) ? " hidden" : ""}" data-snack="${it.snack ? 1 : 0}">${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div></div>`).join("");
   ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, sid, keep[it.id] || 0, null, $("exh_" + it.id)));
   const snacks = ex.filter(it => it.snack && Store.stockLeft(it.id, date, sid, null) > 0);
   const sb = $("snackBtn");
