@@ -395,6 +395,7 @@
       <div id="addonDesc" class="hint hidden" style="margin:2px 0 6px;color:var(--text,#333);font-weight:600"></div>
       <select id="addon"></select>
       <div class="hint" id="addonStock"></div>
+      <button type="button" class="btn ghost hidden" id="snackBtn" style="margin-top:8px">🍱 野餐套組已額滿，查看單點輕食</button>
       <div id="extraItems"></div>
       </div>
 
@@ -494,7 +495,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AM</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AN</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
 
       <div id="layBar">
         <b>整理版面中</b>：用每張卡片下方的 ⤒（移到最上面）、▲、▼ 調整順序，點色點換顏色。設定只存在這支瀏覽器，手機和電腦要各自設定。
@@ -1284,7 +1285,7 @@ const qtyOf = (b, id) => id === "set" ? (+b.addonQty || 0) : (+((b.extras || {})
 function extraItems(){
   const S = Store.settings();
   return (Array.isArray(S.items) ? S.items : []).filter(it => it && /^[a-z][a-z0-9]{0,11}$/.test(String(it.id)) && it.id !== "set" && String(it.name || "").trim())
-    .slice(0, 8).map(it => ({ id:it.id, name:String(it.name).trim(), unit:String(it.unit || "個").trim() || "個", price:Math.max(0, +it.price || 0), max:Math.min(20, Math.max(1, +it.max || 5)), img:/^[a-z0-9]{1,16}$/.test(String(it.img || "")) ? String(it.img) : "" }));
+    .slice(0, 12).map(it => ({ id:it.id, snack:!!it.snack, name:String(it.name).trim(), unit:String(it.unit || "個").trim() || "個", price:Math.max(0, +it.price || 0), max:Math.min(20, Math.max(1, +it.max || 5)), img:/^[a-z0-9]{1,16}$/.test(String(it.img || "")) ? String(it.img) : "" }));
 }
 const itemImgUrl = it => it && it.img && API.on() ? `${CONFIG.apiUrl.replace(/\/+$/, "")}/api/item-img/${it.id}?v=${it.img}` : "";
 function allItems(){ const A = CONFIG.addon; return [{ id:"set", name:A.name, unit:A.unit, price:A.price, max:A.max, isSet:true }].concat(extraItems()); }
@@ -1843,10 +1844,36 @@ function renderItemSelects(){
   $("addonSec").classList.remove("hidden");
   fillItemSelect($("addon"), its[0], date, sid, +$("addon").value || 0, null, $("addonStock"));
   const box = $("extraItems"), keep = {};
+  const known0 = !!(date && (sid || Store.stockMode("set") === "day")), setFull = known0 && Store.stockLeft("set", date, sid, null) <= 0;
   box.querySelectorAll("select").forEach(x => { keep[x.dataset.id] = +x.value || 0; });
   const ex = its.slice(1);
-  box.innerHTML = ex.map(it => `${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div>`).join("");
+  box.innerHTML = ex.map(it => `<div class="ex-wrap${it.snack && !setFull && !(keep[it.id] > 0) ? " hidden" : ""}" data-snack="${it.snack ? 1 : 0}">${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label for="ex_${it.id}" style="margin-top:10px">加購 ${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select id="ex_${it.id}" data-id="${it.id}"></select><div class="hint" id="exh_${it.id}"></div></div>`).join("");
   ex.forEach(it => fillItemSelect($("ex_" + it.id), it, date, sid, keep[it.id] || 0, null, $("exh_" + it.id)));
+  const snacks = ex.filter(it => it.snack && Store.stockLeft(it.id, date, sid, null) > 0);
+  const sb = $("snackBtn");
+  sb.classList.toggle("hidden", !(setFull && snacks.length));
+  if(!(setFull && snacks.length)){ window._snackKey = ""; return; }
+  const key = date + "|" + sid;
+  if(window._snackKey !== key){ window._snackKey = key; openSnackPopup(snacks); }
+}
+document.addEventListener("click", e => { if(e.target && e.target.id === "snackBtn"){ const d = $("date").value, sd = $("session").value; openSnackPopup(extraItems().filter(it => it.snack && Store.stockLeft(it.id, d, sd, null) > 0)); } });
+function openSnackPopup(snacks){
+  const old = document.getElementById("snackPop"); if(old) old.remove();
+  const el = document.createElement("div"); el.id = "snackPop"; el.className = "done-overlay";
+  el.innerHTML = `<div class="done-box"><div class="done-panel" style="text-align:left">
+    <h2 style="margin-top:0">🍱 野餐套組已額滿</h2>
+    <div class="hint" style="margin:0 0 8px">這個場次的野餐套組已被預訂完囉！要不要看看<b>單點輕食</b>？可直接加進這筆預約。</div>
+    ${snacks.map(it => { const left = Store.stockLeft(it.id, $("date").value, $("session").value, null), mx = left === Infinity ? it.max : Math.min(it.max, left); const cur = +($("ex_" + it.id) || {}).value || 0;
+      return `${itemImgUrl(it) ? `<img class="item-thumb" data-zoom="${esc(itemImgUrl(it))}" src="${esc(itemImgUrl(it))}" alt="${esc(it.name)}照片" loading="lazy">` : ""}<label style="margin-top:10px">${esc(it.name)}（${esc(money(it.price))}／${esc(it.unit)}）</label><select data-sn="${esc(it.id)}">${Array.from({ length: mx + 1 }, (_, n) => `<option value="${n}"${n === cur ? " selected" : ""}>${n === 0 ? "不需要" : n + " " + esc(it.unit)}</option>`).join("")}</select>`; }).join("")}
+    <div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn" id="snackOk" style="flex:1">加入預約</button><button type="button" class="btn ghost" id="snackNo" style="flex:1">不用了</button></div>
+  </div></div>`;
+  document.body.appendChild(el);
+  const close = () => el.remove();
+  $("snackNo").onclick = close;
+  $("snackOk").onclick = () => {
+    el.querySelectorAll("select[data-sn]").forEach(x => { const t = $("ex_" + x.dataset.sn), n = +x.value || 0; if(t){ t.closest(".ex-wrap").classList.remove("hidden"); t.value = String(n); } });
+    close(); renderItemSelects(); renderPrice();
+  };
 }
 
 // 加購商品照片：預設使用內嵌照片（單一檔案也看得到）；點一下放大，載入失敗時自動隱藏
@@ -3225,6 +3252,7 @@ function invRowHtml(it, sk){
     ${set || !API.on() ? "" : `<div class="iv-photo" style="margin-top:8px"><label style="margin-top:0">照片（客人預約時會看到）</label>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><img class="iv-thumb item-thumb ${it.img ? "" : "hidden"}" style="margin:0" src="${esc(itemImgUrl(it))}" alt="">
       <input type="file" class="iv-file" accept="image/*" style="max-width:100%"><button type="button" class="btn ghost small iv-imgdel ${it.img ? "" : "hidden"}">移除照片</button></div></div>`}
+    ${set ? "" : `<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:600"><input type="checkbox" class="iv-snack" style="width:auto" ${it.snack ? "checked" : ""}> 🍱 這是「單點輕食」（野餐套組額滿時，會跳出來推薦給客人）</label>`}
     <label>數量限制方式</label>
     <select class="iv-mode"><option value="session" ${sk.mode === "day" ? "" : "selected"}>分上午／下午，各自計算</option><option value="day" ${sk.mode === "day" ? "selected" : ""}>整天合計（上午＋下午共用）</option></select>
     <div class="iv-daybox ${sk.mode === "day" ? "" : "hidden"}"><label>整天固定數量（留空 = 不限）</label><input class="iv-defday" type="number" min="0" placeholder="不限" value="${sk.mode === "day" && sk.def !== null && sk.def !== undefined ? esc(sk.def) : ""}"></div>
@@ -3343,9 +3371,9 @@ async function invSaveItems(){
     if(!name) return msg(out, "請填寫品項名稱", "err");
     if(!Number.isInteger(price) || price < 0 || price > 100000) return msg(out, `「${name}」單價請輸入 0 以上的整數`, "err");
     if(!Number.isInteger(max) || max < 1 || max > 20) return msg(out, `「${name}」單筆預約最多請輸入 1～20`, "err");
-    items.push({ id, name, unit, price, max, img: row.dataset.img || "", _new: row._newImg || null, _rm: !!row._rmImg });
+    items.push({ id, name, unit, price, max, snack: !!(q(".iv-snack") && q(".iv-snack").checked), img: row.dataset.img || "", _new: row._newImg || null, _rm: !!row._rmImg });
   }
-  if(items.length > 8) return msg(out, "租借品項最多 8 種", "err");
+  if(items.length > 12) return msg(out, "租借品項（含單點輕食）最多 12 種", "err");
   Object.keys(stock).forEach(id => { if(id !== "set" && !items.some(i => i.id === id)) delete stock[id]; });
   try{                                          // 先上傳／移除照片，再存設定
     for(const it of items){
@@ -3377,7 +3405,7 @@ function resizeImage(file, max){
 }
 function bindInventory(){
   $("invAdd").addEventListener("click", () => {
-    if(document.querySelectorAll("#invItems .inv-row").length >= 9) return msg($("invMsg"), "租借品項最多 8 種（另加套組）", "err");
+    if(document.querySelectorAll("#invItems .inv-row").length >= 13) return msg($("invMsg"), "租借品項最多 12 種（另加套組）", "err");
     $("invItems").insertAdjacentHTML("beforeend", invRowHtml({ id:newItemId(), name:"", unit:"張", price:0, max:5 }, null));
     const last = $("invItems").lastElementChild; last.querySelector(".iv-name").focus();
   });
