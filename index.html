@@ -281,12 +281,15 @@
     body > *:not(#printArea){display:none !important}
     html,body{background:#fff !important;background-image:none !important}
     body::before,body::after{display:none !important;background:none !important;content:none !important}
-    #printArea{display:block;color:#000;font-size:13px}
+    #printArea{display:block;color:#000;font-size:12px}
     #printArea h1{font-size:20px;margin:0 0 4px}
     #printArea .pr-sub{color:#444;margin:0 0 10px}
     #printArea table{width:100%;border-collapse:collapse;margin-top:6px}
-    #printArea td:last-child{min-width:150px;font-size:12px;word-break:break-all}
-    #printArea th,#printArea td{border:1px solid #777;padding:5px 6px;text-align:left;vertical-align:top}
+    #printArea table{table-layout:fixed}
+    #printArea th,#printArea td{border:1px solid #777;padding:4px 4px;text-align:left;vertical-align:top;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #printArea th{white-space:normal}
+    #printArea td:last-child{font-size:11px}
+    #printArea col.c1{width:8%}#printArea col.c2{width:8%}#printArea col.c3{width:13%}#printArea col.c4{width:15%}#printArea col.c5{width:7%}#printArea col.c6{width:6%}#printArea col.c7{width:13%}#printArea col.c8{width:7%}#printArea col.c9{width:23%}
     #printArea th{background:#eee}
     #printArea td.n,#printArea th.n{text-align:center}
     #printArea tr.sub td{background:#f6f6f6;font-weight:700}
@@ -499,7 +502,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AW</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AY</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -4134,14 +4137,14 @@ function exportStatsPdf(){
   const groups = [...new Set(list.map(b => sessionOf(b)))];
   groups.forEach(sid => {
     const rows = list.filter(b => sessionOf(b) === sid), ses = sessionById(sid), name = ses ? `${ses.label} ${ses.time}` : String(sid);
-    rows.forEach(b => { body += tr("", [esc(name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大人 ${+b.adults || 0}／孩童 ${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickText(b) ? `<b>第二主食</b>：${esc(pickText(b))}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("<br>")]); });
+    rows.forEach(b => { body += tr("", [esc(ses ? ses.label : name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大${+b.adults || 0}／童${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickText(b) ? `<b>第二主食</b>：${esc(pickText(b))}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("　")]); });
     const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 筆預約`, "", t.p, t.pets, t.cars, "", t.sets, ""]);
   });
   const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 筆預約`, "", T.p, T.pets, T.cars, "", T.sets, ""]);
   const now = new Date();
   $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　預約統計</h1>
     <div class="pr-sub">${esc(showDate(date))}　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
-    <table><thead><tr><th>預約時段</th><th>預計入園</th><th>姓名</th><th class="n">人數</th><th class="n">毛小孩</th><th class="n">車數</th><th>電話</th><th class="n">${esc(CONFIG.addon.name)}（${esc(CONFIG.addon.unit)}）</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>`
+    <table><colgroup>${[1,2,3,4,5,6,7,8,9].map(i => `<col class="c${i}">`).join("")}</colgroup><thead><tr><th>預約時段</th><th>預計入園</th><th>姓名</th><th class="n">人數</th><th class="n">毛小孩</th><th class="n">車數</th><th>電話</th><th class="n">${esc(CONFIG.addon.name)}（${esc(CONFIG.addon.unit)}）</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>`
     + (lodgeSets ? `<div class="pr-sub" style="margin-top:8px">另有住宿客／互惠客 ${lodgeSets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（未列入上表，不計入入園人數）</div>` : "");
   const oldTitle = document.title; document.title = `預約統計-${date}`;
   const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
