@@ -289,6 +289,7 @@
     #printArea th,#printArea td{border:1px solid #777;padding:4px 4px;text-align:left;vertical-align:top;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #printArea th{white-space:normal}
     #printArea td:last-child{font-size:11px}
+    #printArea col.m1{width:7%}#printArea col.m2{width:7%}#printArea col.m3{width:10%}#printArea col.m4{width:11%}#printArea col.m5{width:5%}#printArea col.m6{width:15%}#printArea col.m7{width:17%}#printArea col.m8{width:14%}#printArea col.m9{width:14%}
     #printArea col.c1{width:8%}#printArea col.c2{width:8%}#printArea col.c3{width:13%}#printArea col.c4{width:15%}#printArea col.c5{width:7%}#printArea col.c6{width:6%}#printArea col.c7{width:13%}#printArea col.c8{width:7%}#printArea col.c9{width:23%}
     #printArea th{background:#eee}
     #printArea td.n,#printArea th.n{text-align:center}
@@ -502,7 +503,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-AY</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BA</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -513,7 +514,8 @@
       <div class="card" id="statCard">
         <h2>當日統計（人數・毛小孩・車輛・抵達時間）</h2>
         <div class="row"><input type="date" id="stDate"><button class="btn small" id="stPdf">匯出 PDF</button></div>
-        <div class="hint" style="margin:4px 0 0">PDF 內容：預約時段、預計入園時間、姓名、人數、毛小孩、車數、電話、套組數量（依上方選擇的日期）。</div>
+        <div class="row" style="margin-top:6px"><button class="btn small" id="stMealPdf" style="width:100%">🍽 匯出「有預約餐點」的顧客清單 PDF</button></div>
+        <div class="hint" style="margin:4px 0 0">「匯出 PDF」＝當日總清單（預約時段、入園時間、姓名、人數、毛小孩、車數、電話、套組數量）。「餐點清單」＝只列有訂套組或單點輕食的顧客，<b>含住宿客與互惠客</b>，並列出主菜、第二主食、輕食與備註。兩者都依上方選擇的日期。</div>
         <div id="stChips" style="margin-top:6px"></div>
         <div id="stBox"></div>
       </div>
@@ -1312,13 +1314,29 @@ function setChoiceCfg(){
   return { fixed: opts.includes(c.fixed) ? c.fixed : (opts.find(x => /馬鈴薯/.test(x)) || opts[opts.length - 1] || ""), on: c.on !== false && opts.length > 0, title: String(c.title || "").trim() || "第二主食", options: opts };
 }
 const pickText = b => { const m = {}; (Array.isArray(b.setPick) ? b.setPick : []).forEach(v => { m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([k, n]) => `${k} ×${n}`).join("、"); };
+function mainCfg(){
+  const c = (Store.settings().setMain) || {};
+  const opts = (Array.isArray(c.options) ? c.options : ["嫩烤雞腿排", "舒肥雞胸肉"]).map(x => String(x).trim()).filter(Boolean).slice(0, 6);
+  const from = /^\d{4}-\d\d-\d\d$/.test(String(c.from || "")) ? String(c.from) : "";
+  return { on: c.on !== false && !!from && opts.length > 0, from, title: String(c.title || "").trim() || "主菜", options: opts };
+}
+const mainOnDate = d => { const m = mainCfg(); return m.on && !!d && d >= m.from; };
+const mainText = b => { const m = {}; (Array.isArray(b.setMain) ? b.setMain : []).forEach(v => { m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([k, n]) => `${k} ×${n}`).join("、"); };
+// 一筆預約的選擇（主菜、第二主食）合成一行文字；沒有就回空字串
+const pickLine = b => [mainText(b) ? `${mainCfg().title}：${mainText(b)}` : "", pickText(b) ? `${setChoiceCfg().title}：${pickText(b)}` : ""].filter(Boolean).join("　");
+// 全部預約的選擇份數合計
+function pickTotals(list){ const m = {}; list.forEach(b => [].concat(Array.isArray(b.setMain) ? b.setMain : [], Array.isArray(b.setPick) ? b.setPick : []).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${k} ×${n}`); }
 function readPicks(box){ return box ? Array.from(box.querySelectorAll("select[data-pick]")).map(x => x.value) : []; }
-function renderPickBox(box, qty, cur){
-  if(!box) return; const cfg = setChoiceCfg(); qty = Math.max(0, Math.floor(+qty || 0));
-  if(!cfg.on || !qty){ box.innerHTML = ""; return; }
-  const keep = Array.isArray(cur) ? cur : readPicks(box);
-  box.innerHTML = `<div class="hint" style="margin:8px 0 0;color:#8a5a00;font-weight:700">請為每一組${esc(CONFIG.addon.name)}選擇${esc(cfg.title)}：</div>` +
-    Array.from({ length: qty }, (_, i) => `<label style="margin-top:8px">第 ${i + 1} ${esc(CONFIG.addon.unit)}・${esc(cfg.title)} *</label><select data-pick="${i}"><option value="">請選擇</option>${cfg.options.map(o => `<option value="${esc(o)}"${keep[i] === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`).join("");
+function readMains(box){ return box ? Array.from(box.querySelectorAll("select[data-main]")).map(x => x.value) : []; }
+// o = { qty, date, pick:"free"|"fixed"|"none", curPick, curMain }：每一組各出現主菜（指定日期起）與第二主食（固定時不出現）兩個選單
+function renderPickBox(box, o){
+  if(!box) return; const cfg = setChoiceCfg(), mc = mainCfg(), qty = Math.max(0, Math.floor(+o.qty || 0));
+  const needPick = cfg.on && o.pick === "free", needMain = mc.on && mainOnDate(o.date);
+  if(!qty || !(needPick || needMain)){ box.innerHTML = ""; return; }
+  const kp = Array.isArray(o.curPick) ? o.curPick : readPicks(box), km = Array.isArray(o.curMain) ? o.curMain : readMains(box);
+  const sel = (kind, i, cfgx, keep) => `<label style="margin-top:8px">第 ${i + 1} ${esc(CONFIG.addon.unit)}・${esc(cfgx.title)} *</label><select data-${kind}="${i}"><option value="">請選擇</option>${cfgx.options.map(x => `<option value="${esc(x)}"${keep[i] === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  box.innerHTML = `<div class="hint" style="margin:8px 0 0;color:#8a5a00;font-weight:700">請為每一組${esc(CONFIG.addon.name)}選擇${[needMain ? mc.title : "", needPick ? cfg.title : ""].filter(Boolean).join("與")}：</div>` +
+    Array.from({ length: qty }, (_, i) => (needMain ? sel("main", i, mc, km) : "") + (needPick ? sel("pick", i, cfg, kp) : "")).join("");
 }
 /* ========= 租借品項（野餐套組 + 之後新增的野餐椅…）========= */
 const qtyOf = (b, id) => id === "set" ? (+b.addonQty || 0) : (+((b.extras || {})[id]) || 0);
@@ -2181,7 +2199,7 @@ function renderKidsAck(){
 }
 function renderPrice(){
   renderKidsAck();
-  if($("setPickBox")) renderPickBox($("setPickBox"), (noMealOn($("date").value) || mealOpenOn($("date").value)) ? 0 : $("addon").value);
+  if($("setPickBox")) renderPickBox($("setPickBox"), { qty: noMealOn($("date").value) ? 0 : $("addon").value, date: $("date").value, pick: mealOpenOn($("date").value) ? "fixed" : "free" });
   const p = calc();
   $("adultLabel").textContent = `大人（${money(p.ap)}／人${p.wd ? "，平日" : ""}）`;
   const people = p.a + p.c;
@@ -2415,6 +2433,7 @@ document.addEventListener("change",e => {
   $("stDate").addEventListener("change", renderStats);
   $("trDays").addEventListener("change", renderTraffic); $("trReload").addEventListener("click", () => Store.load().then(renderTraffic).catch(renderTraffic));
   $("stPdf").addEventListener("click", exportStatsPdf);
+  $("stMealPdf").addEventListener("click", exportMealPdf);
   $("stChips").addEventListener("click", e => {
     const b = e.target.closest("[data-st]"); if(!b) return;
     $("stDate").value = b.dataset.st; renderStats();
@@ -2463,8 +2482,9 @@ function submitBooking(){
   if(!Number.isInteger(cars) || cars < 0 || cars > CONFIG.maxCars) return msg(out, `車輛數請選 0～${CONFIG.maxCars} 輛`, "err");
   if(kidsAckNeeded(date, p.c) && !$("kidsAck").checked){ $("kidsAck").focus(); return msg(out, `毛小孩野餐日為確保安全，不開放 ${CONFIG.petDayMinAge} 歲以下小孩入園，請勾選確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲`, "err"); }
   if(!$("agree").checked) return msg(out, "請先勾選「我已詳閱上述注意事項」", "err");
-  const picks = readPicks($("setPickBox")), scc = setChoiceCfg();
+  const picks = readPicks($("setPickBox")), mains = readMains($("setPickBox")), scc = setChoiceCfg(), mcc = mainCfg();
   if(scc.on && p.q > 0 && !mealOpenOn($("date").value) && (picks.length !== p.q || picks.some(v => !v))){ const bx = $("setPickBox").querySelector("select[data-pick]"); if(bx) bx.focus(); return msg(out, `請為每一組${CONFIG.addon.name}選擇${scc.title}`, "err"); }
+  if(mcc.on && p.q > 0 && mainOnDate($("date").value) && (mains.length !== p.q || mains.some(v => !v))){ const bx = $("setPickBox").querySelector("select[data-main]"); if(bx) bx.focus(); return msg(out, `請為每一組${CONFIG.addon.name}選擇${mcc.title}`, "err"); }
   for(const it of allItems()){
     const q = it.id === "set" ? p.q : (p.x[it.id] || 0); if(!q) continue;
     const l = Store.stockLeft(it.id, date, sid);
@@ -2475,7 +2495,7 @@ function submitBooking(){
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
     code: date.slice(5).replace("-", "") + phone.slice(-5),      // 例：10/20 + 手機末 5 碼 → 102070045
     date, session: sid, arrival,
-    adults: p.a, children: p.c, addonQty: p.q, extras: p.x, setPick: (scc.on && p.q > 0) ? (mealOpenOn($("date").value) ? Array(p.q).fill(scc.fixed) : picks) : [],
+    adults: p.a, children: p.c, addonQty: p.q, extras: p.x, setMain: (mcc.on && p.q > 0 && mainOnDate($("date").value)) ? mains : [], setPick: (scc.on && p.q > 0) ? (mealOpenOn($("date").value) ? Array(p.q).fill(scc.fixed) : picks) : [],
     pets, cars, ...(kidsAckNeeded(date, p.c) ? { kidsOk: true } : {}),
     name, phone, email, emailOpt: !!email && $("emailOpt").checked, note,
     petFee: p.petTotal, total: p.total, credit: p.credit, discount: p.discount,
@@ -2492,7 +2512,7 @@ function submitBooking(){
     <div><b>${esc(showDate(date))}　${esc(ses.label)}</b></div>
     <div>預計 ${esc(arrival)} 抵達・車 ${cars} 輛</div>
     <div>大人 ${p.a}・孩童 ${p.c}${pets ? `・毛小孩 ${pets} 隻` : ""}${p.q ? `・${esc(CONFIG.addon.name)} ${p.q} ${CONFIG.addon.unit}` : ""}${extraItems().filter(it => p.x[it.id]).map(it => `・${esc(it.name)} ${p.x[it.id]} ${esc(it.unit)}`).join("")}</div>
-    ${pickText(booking) ? `<div>${esc(scc.title)}：${esc(pickText(booking))}</div>` : ""}
+    ${pickLine(booking) ? `<div>${esc(pickLine(booking))}</div>` : ""}
     <div>${esc(name)}　${esc(phone)}</div>
     ${p.petTotal ? `<div>毛小孩費用 ${p.pets} 隻 × ${p.petRate} ＝ ${money(p.petTotal)}</div>` : ""}
     ${p.discount ? `<div>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount} ＝ －${money(p.discount)}</div>` : ""}
@@ -2569,7 +2589,7 @@ function bookingCard(b, admin){
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
     ${b.lodging ? `<div><b>${guestIcon(b)} ${guestName(b)}（僅套組追蹤，不計入入園人數）</b></div>` : ""}
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
-    ${pickText(b) ? `<div>🍽 ${esc(setChoiceCfg().title)}：<b>${esc(pickText(b))}</b></div>` : ""}
+    ${pickLine(b) ? `<div>🍽 <b>${esc(pickLine(b))}</b></div>` : ""}
     ${admin && b.lineName ? `<div>💬 LINE：<b>${esc(b.lineName)}</b> <button class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button></div>` : ""}
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
@@ -2815,8 +2835,7 @@ function renderKit(){
   renderSnackMon();
   const sets = list.reduce((n, b) => n + b.addonQty, 0);
   const paidSum = list.reduce((n, b) => n + (!b.lodging && kitOf(b).depositPaid ? depositDue(b.addonQty || 0) : 0), 0);
-  const pk = {}; list.forEach(b => (Array.isArray(b.setPick) ? b.setPick : []).forEach(v => { pk[v] = (pk[v] || 0) + 1; }));
-  const pkTxt = Object.keys(pk).length ? "（" + Object.entries(pk).map(([k, n]) => `${k} ×${n}`).join("、") + "）" : "";
+  const pkL = pickTotals(list), pkTxt = pkL.length ? "（" + pkL.join("、") + "）" : "";
   $("kStat").textContent = `${list.length} 筆、共 ${sets} ${CONFIG.addon.unit}${CONFIG.addon.name}${pkTxt}；今天以後尚未退還的押金合計 ${money(held)}` + (paidSum ? `；已收訂金合計 ${money(paidSum)}（結帳需扣除）` : "");
   $("kitList").innerHTML = list.length ? list.map(b => {
     const k = kitOf(b), ses = sessionById(sessionOf(b)), id = esc(b.id);
@@ -2826,7 +2845,7 @@ function renderKit(){
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <button type="button" class="kit-name" data-kit-toggle aria-expanded="${open}" title="點一下看電話與付款資訊"><span class="nm">${esc(b.name)}</span><span class="sets">${b.addonQty} ${esc(CONFIG.addon.unit)}</span><span class="chev">▾</span></button>
       <div class="kit-meta">${when}</div>
-      ${pickText(b) ? `<div style="font-weight:700;margin-top:4px">🍽 ${esc(pickText(b))}</div>` : ""}
+      ${pickLine(b) ? `<div style="font-weight:700;margin-top:4px">🍽 ${esc(pickLine(b))}</div>` : ""}
       <div class="kit-quick" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center">
         <span>📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</span>
         ${b.lineUserId ? `<span>💬 <b>${esc(b.lineName || "已綁定 LINE")}</b>${b.lineName ? ` <button type="button" class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button>` : ""}</span><button type="button" class="btn small" data-pickup="${id}" style="background:#06c755">🍱 通知取餐</button>${b.pickupNotifiedAt ? `<span style="color:#06a847">✔ 已通知 ${esc(fmtTime(b.pickupNotifiedAt).slice(5))}</span>` : ""}` : `<span style="color:var(--muted)">⬜ 未綁定 LINE（展開可顯示 QR）</span>`}
@@ -3222,7 +3241,7 @@ let cuId = null;
 function cuRead(){
   const n = id => Number($(id).value);
   return { date:$("cuDate").value, session:$("cuSession").value, arrival:$("cuArrival").value, cars:n("cuCars"),
-    adults:n("cuAdults"), children:n("cuChildren"), pets:n("cuPets"), addonQty:n("cuAddon"), setPick: readPicks($("cuPickBox")),
+    adults:n("cuAdults"), children:n("cuChildren"), pets:n("cuPets"), addonQty:n("cuAddon"), setPick: readPicks($("cuPickBox")), setMain: readMains($("cuPickBox")),
     extras:(() => { const o = {}; document.querySelectorAll("#cuExtras select").forEach(x => { if(+x.value > 0) o[x.dataset.id] = +x.value; }); return o; })(),
     email:$("cuEmail").value.trim(), note:$("cuNote").value.trim(), ...($("cuKidsRow").classList.contains("hidden") ? {} : { kidsOk: $("cuKids").checked }) };
 }
@@ -3236,7 +3255,7 @@ function cuRender(){
   let e = cuRead(); const S = Store.settings();
   { const its = allItems(); fillItemSelect($("cuAddon"), its[0], e.date, e.session, e.addonQty, b, $("cuAddonStock"));
     its.slice(1).forEach(it => fillItemSelect($("cuEx_" + it.id), it, e.date, e.session, e.extras[it.id] || 0, b, null)); e = cuRead();
-    { const had = readPicks($("cuPickBox")); renderPickBox($("cuPickBox"), mealOpenOn(e.date) ? 0 : e.addonQty, had.length ? had : (Array.isArray(b.setPick) ? b.setPick : [])); e = cuRead(); } }
+    { const had = readPicks($("cuPickBox")), hadM = readMains($("cuPickBox")), first = !$("cuPickBox").firstChild; renderPickBox($("cuPickBox"), { qty: e.addonQty, date: e.date, pick: mealOpenOn(e.date) ? "fixed" : "free", curPick: (had.length || !first) ? had : (Array.isArray(b.setPick) ? b.setPick : []), curMain: (hadM.length || !first) ? hadM : (Array.isArray(b.setMain) ? b.setMain : []) }); e = cuRead(); } }
   // 場次選項：顯示剩餘名額（本筆原本佔用的名額算回去）
   const info = e.date ? dayInfo(e.date, S) : null;
   const keepSame = e.date === b.date;
@@ -3313,6 +3332,9 @@ async function saveCustomerEdit(){
   if(scc.on && e.addonQty > 0 && mealOpenOn(e.date)) e.setPick = Array(e.addonQty).fill(scc.fixed);
   else if(scc.on && e.addonQty > 0 && (hadPick || e.addonQty > (old.addonQty || 0)) && (e.setPick.length !== e.addonQty || e.setPick.some(v => !v))) return fail(`請為每一組${CONFIG.addon.name}選擇${scc.title}`);
   if(!(scc.on && e.addonQty > 0 && e.setPick.length === e.addonQty && e.setPick.every(Boolean))) e.setPick = [];
+  const mcc = mainCfg(), hadMain = Array.isArray(old.setMain) && old.setMain.length > 0;
+  if(mcc.on && e.addonQty > 0 && mainOnDate(e.date) && (hadMain || e.addonQty > (old.addonQty || 0) || old.date < mcc.from) && (e.setMain.length !== e.addonQty || e.setMain.some(v => !v))) return fail(`請為每一組${CONFIG.addon.name}選擇${mcc.title}`);
+  if(!(mcc.on && e.addonQty > 0 && mainOnDate(e.date) && e.setMain.length === e.addonQty && e.setMain.every(Boolean))) e.setMain = [];
   const p = cuPrice(e);
   const emailOpt = !!e.email && $("cuEmailOpt").checked;
   const changes = [], show = (k, v) => k === "session" ? ((sessionById(v) || {}).label || v) : v;
@@ -3321,6 +3343,7 @@ async function saveCustomerEdit(){
     if(String(was) !== String(e[k])) changes.push({ f:label, from:show(k, was), to:show(k, e[k]) });
   });
   extraItems().forEach(it => { if(qtyOf(old, it.id) !== (e.extras[it.id] || 0)) changes.push({ f:it.name, from:qtyOf(old, it.id), to:e.extras[it.id] || 0 }); });
+  if(mainText(old) !== mainText(e)) changes.push({ f:mainCfg().title, from:mainText(old) || "—", to:mainText(e) || "—" });
   if(pickText(old) !== pickText(e)) changes.push({ f:scc.title, from:pickText(old) || "—", to:pickText(e) || "—" });
   if(!!old.emailOpt !== emailOpt) changes.push({ f:"寄送通知", from:old.emailOpt ? "是" : "否", to:emailOpt ? "是" : "否" });
   if(!changes.length) return fail("沒有任何變更");
@@ -3375,12 +3398,17 @@ function invRowHtml(it, sk){
   </div>`;
 }
 function renderScBox(){
-  const c = setChoiceCfg(), raw = Store.settings().setChoice || {};
+  const c = setChoiceCfg(), mc = mainCfg();
   $("scBox").innerHTML = `<b>🍽 野餐套組的第二主食選項</b>
     <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:600"><input type="checkbox" id="scOn" style="width:auto" ${c.on ? "checked" : ""}> 客人訂套組時，每一組都要各自選擇</label>
     <label>選項名稱（例如：第二主食）</label><input id="scTitle" maxlength="12" value="${esc(c.title)}">
     <label>可選的內容（一行一個，最多 6 個）</label><textarea id="scOpts" rows="3">${esc(c.options.join("\n"))}</textarea>
     <label>平日（開放餐飲的週二～五）固定給哪一種？</label><select id="scFixed">${c.options.map(o => `<option value="${esc(o)}"${o === c.fixed ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>
+    <div style="border-top:1px dashed var(--line);margin-top:12px;padding-top:10px"><b>🍗 野餐套組的主菜</b>
+      <label for="smFrom">從這一天起，客人訂套組時要選主菜（留空＝不啟用）</label><input type="date" id="smFrom" value="${esc(mc.from)}">
+      <label for="smTitle">選項名稱（例如：主菜）</label><input id="smTitle" maxlength="12" value="${esc(mc.title)}">
+      <label for="smOpts">可選的內容（一行一個，最多 6 個）</label><textarea id="smOpts" rows="3">${esc(mc.options.join("\n"))}</textarea>
+      <div class="hint">起始日之前的預約不受影響；主菜每一組各自選，不分平日或假日。</div></div>
     <div class="hint">改完請按下方「儲存品項與預設數量」。已預約的客人不受影響（保留他們原本的選擇）。</div>`;
 }
 function renderInventory(){
@@ -3505,6 +3533,7 @@ async function invSaveItems(){
     }
   }catch(e){ return msg(out, "照片上傳失敗：" + e.message, "err"); }
   S.items = items; S.stock = stock;
+  S.setMain = { on: !!$("smFrom").value, from: $("smFrom").value, title: $("smTitle").value.trim().slice(0, 12) || "主菜", options: $("smOpts").value.split(/\n/).map(x => x.trim().slice(0, 30)).filter(Boolean).slice(0, 6) };
   S.setChoice = { fixed: $("scFixed") ? $("scFixed").value : "", on: $("scOn").checked, title: $("scTitle").value.trim().slice(0, 12) || "第二主食", options: $("scOpts").value.split(/\n/).map(x => x.trim().slice(0, 30)).filter(Boolean).slice(0, 6) };
   invCommit(S); msg(out, Store.remote ? "已儲存，正在寫入" + BACKEND + "…" : "已儲存", "ok");
 }
@@ -3615,7 +3644,7 @@ function renderCiPending(){
         <div>${esc(ses ? ses.label + " " + ses.time : "")}・預計 ${esc(b.arrival || "—")} 抵達</div>
         <div>大人 ${+b.adults || 0}・孩童 ${+b.children || 0}${pets ? `・毛小孩 ${pets} 隻` : ""}・車 ${carsOf(b)} 輛</div>
         <div>${esc(CONFIG.addon.name)}：${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}` : "無"}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
-        ${pickText(b) ? `<div>🍽 ${esc(setChoiceCfg().title)}：<b>${esc(pickText(b))}</b></div>` : ""}
+        ${pickLine(b) ? `<div>🍽 <b>${esc(pickLine(b))}</b></div>` : ""}
         <div>預約代號 ${esc(b.code)}・預估 ${money(b.total)}${b.email ? `・${esc(b.email)}` : ""}</div>
         ${prepayHtml(b)}
         ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
@@ -3644,7 +3673,7 @@ function ciSearch(){
       <div class="ci-total"><span>門票總金額</span><b data-total>${money(ticketTotal(b.date, b.adults, b.children, petsOf(b)))}</b></div>
       <div class="ci-fine">不含野餐套組費用</div>
       <div class="ci-kit"><span>野餐套組</span><b>${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}（費用另計）` : "無"}</b></div>
-      ${pickText(b) ? `<div class="ci-kit"><span>${esc(setChoiceCfg().title)}</span><b style="font-size:18px">${esc(pickText(b))}</b></div>` : ""}
+      ${pickLine(b) ? `<div class="ci-kit"><span>套組內容</span><b style="font-size:18px">${esc(pickLine(b))}</b></div>` : ""}
       ${prepayHtml(b)}
       ${b.adminNote ? `<div class="adm-note">📝 ${esc(b.adminNote)}</div>` : ""}
       <button class="btn ci-btn" data-ci-save>${k.checkedIn ? "更新人數" : "確認報到"}</button>
@@ -4137,7 +4166,7 @@ function exportStatsPdf(){
   const groups = [...new Set(list.map(b => sessionOf(b)))];
   groups.forEach(sid => {
     const rows = list.filter(b => sessionOf(b) === sid), ses = sessionById(sid), name = ses ? `${ses.label} ${ses.time}` : String(sid);
-    rows.forEach(b => { body += tr("", [esc(ses ? ses.label : name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大${+b.adults || 0}／童${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickText(b) ? `<b>第二主食</b>：${esc(pickText(b))}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("　")]); });
+    rows.forEach(b => { body += tr("", [esc(ses ? ses.label : name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大${+b.adults || 0}／童${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickLine(b) ? `<b>套組</b>：${esc(pickLine(b))}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("　")]); });
     const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 筆預約`, "", t.p, t.pets, t.cars, "", t.sets, ""]);
   });
   const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 筆預約`, "", T.p, T.pets, T.cars, "", T.sets, ""]);
@@ -4147,6 +4176,39 @@ function exportStatsPdf(){
     <table><colgroup>${[1,2,3,4,5,6,7,8,9].map(i => `<col class="c${i}">`).join("")}</colgroup><thead><tr><th>預約時段</th><th>預計入園</th><th>姓名</th><th class="n">人數</th><th class="n">毛小孩</th><th class="n">車數</th><th>電話</th><th class="n">${esc(CONFIG.addon.name)}（${esc(CONFIG.addon.unit)}）</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>`
     + (lodgeSets ? `<div class="pr-sub" style="margin-top:8px">另有住宿客／互惠客 ${lodgeSets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（未列入上表，不計入入園人數）</div>` : "");
   const oldTitle = document.title; document.title = `預約統計-${date}`;
+  const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  window.print();
+}
+
+// 匯出「有預約餐點」的顧客清單（含住宿客、互惠客）：給廚房備餐／出餐對照用
+function exportMealPdf(){
+  const date = $("stDate").value; if(!date) return toast("請先選擇日期", "err");
+  const snacks = extraItems().filter(it => it.snack);
+  const snackText = b => snacks.filter(it => qtyOf(b, it.id) > 0).map(it => `${esc(it.name)} ×${qtyOf(b, it.id)}`).join("、");
+  const list = Store.all().filter(b => b.status === "confirmed" && b.date === date && ((+b.addonQty || 0) > 0 || snackText(b)));
+  if(!list.length) return toast("這天沒有預約餐點的顧客", "err");
+  const ord = b => { if(b.lodging) return 98 + (b.guest === "reciprocal" ? 1 : 0); const i = SESSIONS.findIndex(x => x.id === sessionOf(b)); return i < 0 ? 97 : i; };
+  list.sort((a, b) => ord(a) - ord(b) || String(a.arrival || "").localeCompare(String(b.arrival || "")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const kind = b => b.lodging ? (b.guest === "reciprocal" ? "互惠客" : "住宿客") : (b.walkin ? "現場客" : ((sessionById(sessionOf(b)) || {}).label || "一般"));
+  const note = b => [b.note ? `客人：${esc(b.note)}` : "", b.adminNote ? `店家：${esc(b.adminNote)}` : ""].filter(Boolean).join("　");
+  const tr = (cls, c) => `<tr class="${cls}">${c.map((x, i) => `<td${i === 4 ? ' class="n"' : ""}>${x}</td>`).join("")}</tr>`;
+  let body = "";
+  list.forEach(b => { body += tr("", [esc(kind(b)), esc(b.arrival || "—"), esc(b.name || "—"), esc(b.phone || "—"), (+b.addonQty || 0) || "", esc(mainText(b)), esc(pickText(b)), snackText(b), note(b)]); });
+  const sets = list.reduce((n, b) => n + (+b.addonQty || 0), 0);
+  body += tr("tot", ["合計", `${list.length} 位顧客`, "", "", sets, "", "", "", ""]);
+  const cnt = (f) => { const m = {}; list.forEach(b => f(b).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${esc(k)} ×${n}`).join("、"); };
+  const sn = {}; list.forEach(b => snacks.forEach(it => { const q = qtyOf(b, it.id); if(q > 0) sn[it.name] = (sn[it.name] || 0) + q; }));
+  const lines = [
+    mainCfg().on && cnt(b => Array.isArray(b.setMain) ? b.setMain : []) ? `<div><b>${esc(mainCfg().title)}合計</b>：${cnt(b => Array.isArray(b.setMain) ? b.setMain : [])}</div>` : "",
+    cnt(b => Array.isArray(b.setPick) ? b.setPick : []) ? `<div><b>${esc(setChoiceCfg().title)}合計</b>：${cnt(b => Array.isArray(b.setPick) ? b.setPick : [])}</div>` : "",
+    Object.keys(sn).length ? `<div><b>單點輕食合計</b>：${Object.entries(sn).map(([k, n]) => `${esc(k)} ×${n}`).join("、")}</div>` : ""].filter(Boolean).join("");
+  const now = new Date();
+  $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　餐點清單</h1>
+    <div class="pr-sub">${esc(showDate(date))}　・　共 ${list.length} 位顧客、${sets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（含住宿客／互惠客）　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
+    <table class="meal"><colgroup>${[1,2,3,4,5,6,7,8,9].map(i => `<col class="m${i}">`).join("")}</colgroup><thead><tr><th>類別</th><th>入園</th><th>姓名</th><th>電話</th><th class="n">${esc(CONFIG.addon.unit)}</th><th>${esc(mainCfg().title)}</th><th>${esc(setChoiceCfg().title)}</th><th>單點輕食</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>
+    <div style="margin-top:10px;line-height:1.7">${lines}</div>`;
+  const oldTitle = document.title; document.title = `餐點清單-${date}`;
   const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
   window.addEventListener("afterprint", restore);
   window.print();
@@ -4224,12 +4286,12 @@ function renderTomorrowSets(){
     const n = Store.all().filter(b => b.date === date && b.status === "confirmed" && !b.walkin).reduce((m, b) => m + qtyOf(b, it.id), 0);
     return n ? `${esc(it.name)} ${n} ${esc(it.unit)}` : "";
   }).filter(Boolean).join("　");
-  const pickLine = date => { const m = {}; Store.all().filter(b => b.date === date && b.status === "confirmed" && !b.walkin).forEach(b => (Array.isArray(b.setPick) ? b.setPick : []).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${esc(k)} ×${n}`).join("　"); };
+  const pickDayLine = date => pickTotals(Store.all().filter(b => b.date === date && b.status === "confirmed" && !b.walkin)).map(esc).join("　");
   $("setsBox").innerHTML = `<div class="stat-total" style="text-align:center">
       <div style="font-size:14px">${esc(showDate(tom))}</div>
       <div style="font-size:42px;font-weight:800;line-height:1.2">${a.total} <span style="font-size:18px">${esc(unit)}</span></div>
       <div>${per(a)}${a.lodging ? `　（含住宿／互惠客 ${a.lodging}）` : ""}</div>
-      ${pickLine(tom) ? `<div style="margin-top:6px;font-weight:700">🍽 ${pickLine(tom)}</div>` : ""}
+      ${pickDayLine(tom) ? `<div style="margin-top:6px;font-weight:700">🍽 ${pickDayLine(tom)}</div>` : ""}
       ${exLine(tom) ? `<div style="margin-top:6px;font-weight:700">${exLine(tom)}</div>` : ""}
       ${a.unpaid ? `<div style="color:#b3261e;margin-top:4px">⚠ ${a.unpaid} 筆訂單（${a.unpaidSets} ${esc(unit)}）訂金尚未確認</div>` : ""}
     </div>
@@ -4381,9 +4443,9 @@ function exportCSV(list, filename){
     if(/^[=+\-@]/.test(s)) s = "'" + s;           // 防止試算表公式注入
     return `"${s.replace(/"/g, '""')}"`;
   };
-  const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","第二主食","其他租借","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
+  const head = ["預約代號","日期","場次","預計抵達","大人","孩童","毛小孩(隻)","車輛數","加購套組","套組選擇","其他租借","姓名","手機","Email","寄通知","預估金額","客人備註","店家備註","修改次數","狀態","建立時間"];
   const rows = (list || Store.all()).map(b => [
-    b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty, pickText(b), extrasText(b),
+    b.code, b.date, (sessionById(sessionOf(b)) || {}).label, b.arrival, b.adults, b.children, petsOf(b), carsOf(b), b.addonQty, pickLine(b), extrasText(b),
     b.name, b.phone, b.email, b.emailOpt ? "是" : "否", b.total, b.note, b.adminNote || "", (b.history || []).length, b.status === "confirmed" ? "已確認" : "已取消", b.createdAt
   ]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
