@@ -170,6 +170,9 @@
   .done-line{margin:10px 0;padding:10px;border:2px solid #06c755;border-radius:12px;background:#f0fff5;font-size:15px;line-height:1.5}
   .fold-bar{display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;flex-wrap:wrap}
   /* 整理版面：自訂順序與顏色（只存在這支瀏覽器）*/
+  .pk-set{margin-top:10px;padding:8px 12px 12px;border-radius:12px;border:1px solid rgba(0,0,0,.06)}
+  .pk-h{font-weight:800;color:#2f4f35;margin-bottom:2px}
+  .pk0{background:#eaf5e6}.pk1{background:#fdf1dc}.pk2{background:#e6f0fa}.pk3{background:#f6e8f3}.pk4{background:#fbe9e4}.pk5{background:#eef0d8}
   .gtag{font-size:12px;font-weight:700;color:#2f6b3a;background:#e4f3e6;border-radius:999px;padding:2px 8px;margin-left:8px;white-space:nowrap}
   #grpBar button.on{background:#2f6b3a;color:#fff}
   .lay-ctl{display:none}
@@ -503,7 +506,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BB</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BD</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -1335,9 +1338,9 @@ function renderPickBox(box, o){
   const needPick = cfg.on && o.pick === "free", needMain = mc.on && mainOnDate(o.date);
   if(!qty || !(needPick || needMain)){ box.innerHTML = ""; return; }
   const kp = Array.isArray(o.curPick) ? o.curPick : readPicks(box), km = Array.isArray(o.curMain) ? o.curMain : readMains(box);
-  const sel = (kind, i, cfgx, keep) => `<label style="margin-top:8px">第 ${i + 1} ${esc(CONFIG.addon.unit)}・${esc(cfgx.title)} *</label><select data-${kind}="${i}"><option value="">請選擇</option>${cfgx.options.map(x => `<option value="${esc(x)}"${keep[i] === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  const sel = (kind, i, cfgx, keep) => `<label style="margin-top:8px">${esc(cfgx.title)} *</label><select data-${kind}="${i}"><option value="">請選擇</option>${cfgx.options.map(x => `<option value="${esc(x)}"${keep[i] === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
   box.innerHTML = `<div class="hint" style="margin:8px 0 0;color:#8a5a00;font-weight:700">請為每一組${esc(CONFIG.addon.name)}選擇${[needMain ? mc.title : "", needPick ? cfg.title : ""].filter(Boolean).join("與")}：</div>` +
-    Array.from({ length: qty }, (_, i) => (needMain ? sel("main", i, mc, km) : "") + (needPick ? sel("pick", i, cfg, kp) : "")).join("");
+    Array.from({ length: qty }, (_, i) => `<div class="pk-set pk${i % 6}"><div class="pk-h">🧺 第 ${i + 1} ${esc(CONFIG.addon.unit)}</div>${(needMain ? sel("main", i, mc, km) : "") + (needPick ? sel("pick", i, cfg, kp) : "")}</div>`).join("");
 }
 /* ========= 租借品項（野餐套組 + 之後新增的野餐椅…）========= */
 const qtyOf = (b, id) => id === "set" ? (+b.addonQty || 0) : (+((b.extras || {})[id]) || 0);
@@ -3015,19 +3018,28 @@ function bulkHref(b){
   const ph = String(b.phone).replace(/[^\d]/g, ""), ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
   return "sms:" + ph + (ios ? "&" : "?") + "body=" + encodeURIComponent(bulkBody(b));
 }
+async function bulkLineSend(b){
+  const j = await API.call("POST", "/api/admin/line-send", { id: b.id, text: bulkBody(b) }, true);
+  b.lineLog = j.log; bulkSentSet(b.id);
+}
 function renderBulk(){
   if(!$("bkOut")) return;
   const list = bulkList(), sent = bulkSentGet(), todo = list.filter(b => !sent[b.id]);
-  const len = list[0] ? Array.from(bulkBody(list[0])).length : 0, ucs = list[0] ? /[^\x00-\x7f]/.test(bulkBody(list[0])) : true;
+  const todoSms = todo.filter(b => !b.lineUserId), todoLine = todo.filter(b => b.lineUserId);
+  const smsSample = (todoSms[0] || list.find(b => !b.lineUserId));
+  const len = smsSample ? Array.from(bulkBody(smsSample)).length : 0, ucs = smsSample ? /[^\x00-\x7f]/.test(bulkBody(smsSample)) : true;
   const per = len === 0 ? 0 : (ucs ? (len <= 70 ? 1 : Math.ceil(len / 67)) : (len <= 160 ? 1 : Math.ceil(len / 153)));
   let h = "";
   if(!$("bkDate").value) h = `<div class="hint">請先選日期</div>`;
   else if(!list.length) h = `<div class="hint">這天沒有符合的客人（需要是未取消、有 09 開頭手機號碼的預約）。</div>`;
   else {
-    h = `<div class="hint">共 ${list.length} 位，已傳 ${list.length - todo.length} 位，還沒傳 ${todo.length} 位。第一位的簡訊約 ${len} 字，約 <b>${per} 則</b>（含中文每則 70 字）。</div>`
-      + (todo.length ? `<a class="btn" data-bulk-next="${esc(todo[0].id)}" href="${esc(bulkHref(todo[0]))}" style="text-decoration:none;display:block;text-align:center;background:#1e88e5;min-height:48px;line-height:48px;font-size:17px">📱 傳給下一位：${esc(todo[0].name)}（還剩 ${todo.length} 位）</a>` : `<div class="msg ok">✅ 這天的客人都傳完了</div>`)
+    h = `<div class="hint">共 ${list.length} 位，已傳 ${list.length - todo.length} 位，還沒傳 ${todo.length} 位。已綁定 LINE 的客人（✅ LINE）會直接用 LINE 傳，不用簡訊；其餘用簡訊${smsSample ? `，一則約 ${len} 字，約 <b>${per} 則</b>（含中文每則 70 字）` : ""}。<br>LINE 訊息會用掉官方帳號本月的訊息則數。</div>`
+      + (todoLine.length ? `<button type="button" class="btn" id="bkLineAll" style="display:block;width:100%;background:#06a847;min-height:48px;font-size:17px;margin-bottom:8px">💬 用 LINE 傳給已綁定且還沒傳的 ${todoLine.length} 位</button>` : "")
+      + (todoSms.length ? `<a class="btn" data-bulk-next="${esc(todoSms[0].id)}" href="${esc(bulkHref(todoSms[0]))}" style="text-decoration:none;display:block;text-align:center;background:#1e88e5;min-height:48px;line-height:48px;font-size:17px">📱 簡訊傳給下一位：${esc(todoSms[0].name)}（還有 ${todoSms.length} 位）</a>` : "")
       + `<div style="margin-top:8px">` + list.map(b => `<div class="ack-row"><div class="ack-info"><b>${esc(b.name)}</b>　${esc(b.phone)}<br>${esc(b.arrival || "")}${b.lineUserId ? "　✅ LINE" : ""}${sent[b.id] ? ' <span style="color:#06a847">✔ 已傳</span>' : ""}</div>`
-      + `<a class="btn small ghost" data-bulk-next="${esc(b.id)}" href="${esc(bulkHref(b))}" style="text-decoration:none">傳簡訊</a></div>`).join("") + `</div>`
+        + (b.lineUserId
+          ? `<button type="button" class="btn small" data-bulk-line="${esc(b.id)}" style="background:#06a847">傳 LINE</button>`
+          : `<a class="btn small ghost" data-bulk-next="${esc(b.id)}" href="${esc(bulkHref(b))}" style="text-decoration:none">傳簡訊</a>`) + `</div>`).join("") + `</div>`
       + `<button type="button" class="btn ghost small" id="bkReset" style="margin-top:8px">重設「已傳」記號</button>`;
   }
   $("bkOut").innerHTML = h;
@@ -3040,6 +3052,20 @@ function bindBulk(){
   $("bkText").addEventListener("input", () => { try{ localStorage.setItem("ghBulkText", $("bkText").value); }catch(e){} renderBulk(); });
   $("bkOut").addEventListener("click", e => {
     const a = e.target.closest("[data-bulk-next]"); if(a){ bulkSentSet(a.dataset.bulkNext); setTimeout(renderBulk, 600); return; }
+    const lb = e.target.closest("[data-bulk-line]"); if(lb){
+      const b = Store.all().find(x => x.id === lb.dataset.bulkLine); if(!b) return;
+      twoStep(lb, "再按一次確認傳 LINE", async () => { lb.disabled = true; lb.textContent = "傳送中…"; try{ await bulkLineSend(b); toast("已用 LINE 傳給 " + b.name, "ok"); }catch(er){ toast("傳送失敗：" + er.message, "err"); } renderBulk(); });
+      return;
+    }
+    if(e.target.id === "bkLineAll"){
+      const btn = e.target, sent = bulkSentGet(), todo = bulkList().filter(b => b.lineUserId && !sent[b.id]);
+      twoStep(btn, `再按一次確認傳給 ${todo.length} 位`, async () => {
+        btn.disabled = true; let ok = 0, bad = 0, why = "";
+        for(const b of todo){ btn.textContent = `傳送中… ${ok + bad}/${todo.length}`; try{ await bulkLineSend(b); ok++; }catch(er){ bad++; why = er.message; if(/則數已用完/.test(why)) break; } }
+        toast(`LINE 已傳 ${ok} 位${bad ? `，失敗 ${bad} 位（${why}）` : ""}`, bad ? "err" : "ok"); renderBulk();
+      });
+      return;
+    }
     if(e.target.id === "bkReset"){ try{ localStorage.removeItem(bulkKey()); }catch(er){} renderBulk(); }
   });
   document.addEventListener("toggle", e => { if(e.target && e.target.id === "bulkCard") renderBulk(); }, true);
