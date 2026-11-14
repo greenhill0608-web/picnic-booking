@@ -506,7 +506,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BD</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BE</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -576,18 +576,23 @@
 
       <div class="card">
         <h2>預約清單</h2>
-        <div class="row">
-          <input type="date" id="fDate">
-          <select id="fSort" aria-label="排序方式" style="max-width:100%">
+        <input type="search" id="fSearch" placeholder="🔍 搜尋：電話（可只打後幾碼）、姓名、代號、LINE 名稱" autocomplete="off" style="width:100%;margin-bottom:8px">
+        <div class="grid2" style="margin-bottom:8px">
+          <input type="date" id="fDate" aria-label="入園日期">
+          <select id="fSort" aria-label="排序方式">
             <option value="new">排序：最新預約在上</option>
             <option value="old">排序：最早預約在上</option>
             <option value="dateAsc">排序：入園日期（近→遠）</option>
             <option value="dateDesc">排序：入園日期（遠→近）</option>
           </select>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-bottom:8px">
+          <label class="inline" style="margin:0;white-space:nowrap"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客／互惠客</span></label>
+          <label class="inline" style="margin:0;white-space:nowrap"><input type="checkbox" id="fHideCancel"><span>隱藏已取消</span></label>
+          <label class="inline" style="margin:0;white-space:nowrap"><input type="checkbox" id="fShowPast"><span>顯示過去的預約</span></label>
+        </div>
+        <div class="row">
           <button class="btn ghost small" id="fClear">顯示全部</button>
-          <label class="inline" style="margin:0"><input type="checkbox" id="fHideLodge"><span>隱藏住宿客／互惠客</span></label>
-          <label class="inline" style="margin:0"><input type="checkbox" id="fHideCancel"><span>隱藏已取消</span></label>
-          <label class="inline" style="margin:0"><input type="checkbox" id="fShowPast"><span>顯示過去的預約</span></label>
           <button class="btn small" id="paOpen" style="background:#d98a1f" title="替客人在後台直接新增預約：日期不限、當天也可以、電話可不填">＋ 代客預約</button>
           <button class="btn small" id="csvBtn" title="匯出目前清單顯示的內容（依日期與隱藏條件）">匯出 CSV</button>
         </div>
@@ -2354,11 +2359,12 @@ function bind(){
   $("logoutBtn").addEventListener("click", () => { forgetAdmin(); renderAdmin(); });
   $("fDate").addEventListener("change", renderAdminList);
   $("fShowPast").addEventListener("change", renderAdminList);       // 不記住：每次重新開啟都預設不顯示過去的預約
+  $("fSearch").addEventListener("input", () => { clearTimeout(window._fsT); window._fsT = setTimeout(renderAdminList, 200); });
   [["fHideLodge","picnic_hide_lodge"],["fHideCancel","picnic_hide_cancel"]].forEach(([id,k]) => {
     try{ $(id).checked = localStorage.getItem(k) === "1"; }catch(e){}
     $(id).addEventListener("change", () => { try{ localStorage.setItem(k, $(id).checked ? "1" : "0"); }catch(e){} renderAdminList(); });
   });
-  $("fClear").addEventListener("click", () => { $("fDate").value = ""; renderAdminList(); });
+  $("fClear").addEventListener("click", () => { $("fDate").value = ""; $("fSearch").value = ""; renderAdminList(); });
   $("csvBtn").addEventListener("click", () => {
     const f = $("fDate").value;      // 匯出目前清單顯示的內容（含日期與隱藏條件）
     const list = adminFiltered();
@@ -4268,8 +4274,16 @@ function saveAnnounce(){
 
 // 目前清單套用的篩選（日期、隱藏住宿客、隱藏已取消、過去的預約）；匯出 CSV 也用同一份
 // 預設不顯示今天以前的預約，勾「顯示過去的預約」才會出現；自己選了某個日期就照那天顯示（過去的也可以）
+// 搜尋：只有數字（至少 3 碼）→ 比對電話（含部分號碼）；否則比對姓名、預約代號、LINE 名稱、信箱。搜尋時不受日期／過去預約限制
+function searchMatch(b, q){
+  const digits = q.replace(/[^\d]/g, ""), phone = String(b.phone || "").replace(/[^\d]/g, "");
+  if(/^[\d\s\-+()]+$/.test(q)) return digits.length >= 3 && phone.includes(digits);
+  const t = q.toLowerCase();
+  return [b.name, b.code, b.lineName, b.email, b.phone].some(x => String(x || "").toLowerCase().includes(t));
+}
 function adminFiltered(){
-  const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked, sp = $("fShowPast").checked, t = todayStr();
+  const f = $("fDate").value, hl = $("fHideLodge").checked, hc = $("fHideCancel").checked, sp = $("fShowPast").checked, t = todayStr(), q = $("fSearch").value.trim();
+  if(q) return Store.all().filter(b => searchMatch(b, q) && !(hl && b.lodging) && !(hc && b.status !== "confirmed"));
   return Store.all().filter(b => (!f || b.date === f) && (f || sp || b.date >= t) && !(hl && b.lodging) && !(hc && b.status !== "confirmed"));
 }
 function renderAdminList(){
@@ -4283,10 +4297,12 @@ function renderAdminList(){
     : mode === "dateDesc" ? (a, b) => -byDate(a, b)
     : byDate);
   const ok = list.filter(b => b.status === "confirmed");
-  const hiddenPast = (f || $("fShowPast").checked) ? 0 : Store.all().filter(b => b.date < todayStr()).length;
-  $("fStat").textContent = `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
+  const q = $("fSearch").value.trim();
+  const hiddenPast = (q || f || $("fShowPast").checked) ? 0 : Store.all().filter(b => b.date < todayStr()).length;
+  $("fStat").textContent = (q ? `🔍「${q}」找到 ` : "") + `${list.length} 筆（有效 ${ok.length} 筆，共 ${ok.reduce((s,b)=>s+b.adults+b.children,0)} 位）`
     + (hiddenPast ? `；已隱藏過去的預約 ${hiddenPast} 筆（勾「顯示過去的預約」可看）` : "")
-    + (f ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
+    + (q && $("fHideCancel").checked ? (() => { const n = Store.all().filter(b => searchMatch(b, q) && b.status !== "confirmed").length; return n ? `；另有 ${n} 筆已取消符合（取消勾選「隱藏已取消」可看）` : ""; })() : "")
+    + (f && !q ? `；當日剩餘：` + SESSIONS.map(x => `${x.label} ${Store.remaining(f, x.id)} 位`).join("、") : "");
   $("adminList").innerHTML = list.length ? list.map(b => bookingCard(b, true)).join("") : `<div class="hint">沒有預約資料</div>`;
   renderDeposits();
   renderTomorrowSets();
