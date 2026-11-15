@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BJ</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BK</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -625,6 +625,12 @@
         <label class="inline"><input type="checkbox" id="setSameDay"><span>開放客人申請當日臨時預約</span></label>
         <div class="row" style="margin:8px 0"><button type="button" class="btn ghost small" id="sdReload">重新整理</button><button type="button" class="btn small" id="sdSave">儲存開關</button></div>
         <div id="sdMsg"></div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:#fbfdfb">
+          <b>💬 LINE 通知</b><span id="sdBindState" style="margin-left:8px"></span>
+          <div class="hint" style="margin:4px 0 8px">有人送出申請時，LINE 會立刻通知。第一次要綁定：按「產生綁定代碼」，再用要收通知的 LINE（你的個人帳號，或想通知的群組）對官方帳號傳出下方那句話。</div>
+          <div class="row"><button type="button" class="btn small" id="sdBind">產生綁定代碼</button><button type="button" class="btn ghost small" id="sdTest">傳測試通知</button><button type="button" class="btn ghost small" id="sdUnbind">取消綁定</button></div>
+          <div id="sdBindBox" style="margin-top:8px"></div>
+        </div>
         <div id="sdList" style="margin-top:8px"></div>
       </div>
 
@@ -3196,6 +3202,7 @@ let sdBusy = false;
 async function renderSameDay(){
   if(!$("sdList") || !Store.api || !isAdminLogged() || sdBusy) return;
   $("setSameDay").checked = Store.settings().sameDayOn !== false;
+  if(window._sdBindUi) window._sdBindUi();
   sdBusy = true; let j;
   try{ j = await API.call("GET", "/api/admin/walkreqs", undefined, true); }catch(e){ sdBusy = false; $("sdList").innerHTML = `<div class="hint">無法讀取：${esc(e.message)}</div>`; return; }
   sdBusy = false;
@@ -3214,6 +3221,16 @@ function bindSameDay(){
   if($("sdOpen")) $("sdOpen").addEventListener("click", openSameDay);
   if(!$("sdList")) return;
   $("sdReload").addEventListener("click", renderSameDay);
+  const bindUi = async tk => {
+    let j; try{ j = await API.call("GET", "/api/admin/walknotify", undefined, true); }catch(e){ return; }
+    $("sdBindState").textContent = j.bound ? "✅ 已綁定" + (j.viaEnv ? "（Worker 變數）" : "") : "⚠️ 尚未綁定，不會有 LINE 通知";
+    tk = tk || j.token;
+    $("sdBindBox").innerHTML = (!j.bound && tk) ? `<div>請在要收通知的 LINE 傳這句話給官方帳號（個人聊天或群組皆可）：</div><div style="font-size:20px;font-weight:800;margin:6px 0;user-select:all">綁定預約 ${esc(tk)}</div><div class="hint">手機上也可直接點：<a href="${esc(CONFIG.apiUrl.replace(/\/+$/, ""))}/l/${esc(tk)}" target="_blank" rel="noopener">開啟 LINE 並自動填入</a>（會綁定為「你自己」；要綁群組請把上面那句貼到群組裡傳送）。傳送後按「重新整理」。</div>` : "";
+  };
+  bindUi.run = bindUi; window._sdBindUi = bindUi;
+  $("sdBind").addEventListener("click", async () => { try{ const j = await API.call("POST", "/api/admin/walknotify", { action: "bind" }, true); bindUi(j.token); }catch(e){ toast(e.message, "err"); } });
+  $("sdTest").addEventListener("click", async () => { try{ await API.call("POST", "/api/admin/walknotify", { action: "test" }, true); toast("已傳送測試通知，請看 LINE", "ok"); }catch(e){ toast(e.message, "err"); } });
+  $("sdUnbind").addEventListener("click", e => twoStep(e.target, "再按一次：取消綁定", async () => { try{ await API.call("POST", "/api/admin/walknotify", { action: "unbind" }, true); toast("已取消綁定", "ok"); bindUi(); }catch(er){ toast(er.message, "err"); } }));
   $("sdSave").addEventListener("click", () => { const S = Store.settings(); S.sameDayOn = $("setSameDay").checked; Store.saveSettings(S); msg($("sdMsg"), S.sameDayOn ? "已開放客人申請當日臨時預約" : "已關閉當日臨時申請", "ok"); renderSameDayBtn(); });
   $("sdList").addEventListener("click", e => {
     const btn = e.target.closest("[data-sda]"), row = e.target.closest("[data-sd]"); if(!btn || !row) return;
