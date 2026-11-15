@@ -291,7 +291,7 @@
     #printArea table{table-layout:fixed}
     #printArea th,#printArea td{border:1px solid #777;padding:4px 4px;text-align:left;vertical-align:top;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #printArea th{white-space:normal}
-    #printArea td:last-child{font-size:11px}
+    #printArea td:last-child{font-size:11px;white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip}
     #printArea col.m1{width:7%}#printArea col.m2{width:7%}#printArea col.m3{width:10%}#printArea col.m4{width:11%}#printArea col.m5{width:5%}#printArea col.m6{width:15%}#printArea col.m7{width:17%}#printArea col.m8{width:14%}#printArea col.m9{width:14%}
     #printArea col.c1{width:8%}#printArea col.c2{width:8%}#printArea col.c3{width:13%}#printArea col.c4{width:15%}#printArea col.c5{width:7%}#printArea col.c6{width:6%}#printArea col.c7{width:13%}#printArea col.c8{width:7%}#printArea col.c9{width:23%}
     #printArea th{background:#eee}
@@ -506,7 +506,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BE</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BG</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -1331,7 +1331,13 @@ function mainCfg(){
 const mainOnDate = d => { const m = mainCfg(); return m.on && !!d && d >= m.from; };
 const mainText = b => { const m = {}; (Array.isArray(b.setMain) ? b.setMain : []).forEach(v => { m[v] = (m[v] || 0) + 1; }); return Object.entries(m).map(([k, n]) => `${k} ×${n}`).join("、"); };
 // 一筆預約的選擇（主菜、第二主食）合成一行文字；沒有就回空字串
-const pickLine = b => [mainText(b) ? `${mainCfg().title}：${mainText(b)}` : "", pickText(b) ? `${setChoiceCfg().title}：${pickText(b)}` : ""].filter(Boolean).join("　");
+// 每一組各自的選擇（讓你知道第 1、2、3 組分別是什麼）：「第 1 組：嫩烤雞腿排＋青醬栗子飯糰*2」
+function setRows(b){
+  const m = Array.isArray(b.setMain) ? b.setMain : [], p = Array.isArray(b.setPick) ? b.setPick : [], n = Math.max(m.length, p.length);
+  return Array.from({ length: n }, (_, i) => `第 ${i + 1} ${CONFIG.addon.unit}：${[m[i], p[i]].filter(Boolean).join("＋")}`);
+}
+const pickLine = b => setRows(b).join("；");
+const pickHtml = b => setRows(b).map(esc).join("<br>");
 // 全部預約的選擇份數合計
 function pickTotals(list){ const m = {}; list.forEach(b => [].concat(Array.isArray(b.setMain) ? b.setMain : [], Array.isArray(b.setPick) ? b.setPick : []).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${k} ×${n}`); }
 const snackLine = b => extraItems().filter(it => it.snack && qtyOf(b, it.id) > 0).map(it => `${it.name} ×${qtyOf(b, it.id)}`).join("、");
@@ -2522,7 +2528,7 @@ function submitBooking(){
     <div><b>${esc(showDate(date))}　${esc(ses.label)}</b></div>
     <div>預計 ${esc(arrival)} 抵達・車 ${cars} 輛</div>
     <div>大人 ${p.a}・孩童 ${p.c}${pets ? `・毛小孩 ${pets} 隻` : ""}${p.q ? `・${esc(CONFIG.addon.name)} ${p.q} ${CONFIG.addon.unit}` : ""}${extraItems().filter(it => p.x[it.id]).map(it => `・${esc(it.name)} ${p.x[it.id]} ${esc(it.unit)}`).join("")}</div>
-    ${pickLine(booking) ? `<div>${esc(pickLine(booking))}</div>` : ""}
+    ${pickLine(booking) ? `<div>${pickHtml(booking)}</div>` : ""}
     <div>${esc(name)}　${esc(phone)}</div>
     ${p.petTotal ? `<div>毛小孩費用 ${p.pets} 隻 × ${p.petRate} ＝ ${money(p.petTotal)}</div>` : ""}
     ${p.discount ? `<div>套組折抵 大人 ${p.discountN} 位 × ${CONFIG.addon.adultDiscount} ＝ －${money(p.discount)}</div>` : ""}
@@ -2599,7 +2605,7 @@ function bookingCard(b, admin){
     <div>預計 ${esc(b.arrival || "—")} 抵達・車 ${carsOf(b)} 輛${petsOf(b) ? `・🐶 ${petsOf(b)} 隻` : ""}</div>
     ${b.lodging ? `<div><b>${guestIcon(b)} ${guestName(b)}（僅套組追蹤，不計入入園人數）</b></div>` : ""}
     <div>代號 ${esc(b.code)}・大人 ${b.adults}・孩童 ${b.children}${b.addonQty ? `・${esc(CONFIG.addon.name)} ${b.addonQty}` : ""}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
-    ${pickLine(b) ? `<div>🍽 <b>${esc(pickLine(b))}</b></div>` : ""}
+    ${pickLine(b) ? `<div>🍽 <b>${pickHtml(b)}</b></div>` : ""}
     ${admin && b.lineName ? `<div>💬 LINE：<b>${esc(b.lineName)}</b> <button class="btn ghost small" data-copy="${esc(b.lineName)}" style="padding:2px 10px;min-height:0">複製</button></div>` : ""}
     <div>${esc(b.name)}　${esc(b.phone)}${b.email ? "　" + esc(b.email) + (admin && b.emailOpt ? "（已勾選寄通知）" : "") : ""}</div>
     <div>預估 ${money(b.total)}</div>
@@ -2855,7 +2861,7 @@ function renderKit(){
     return `<div class="kit-row ${done ? "done" : ""}" data-kit="${id}">
       <button type="button" class="kit-name" data-kit-toggle aria-expanded="${open}" title="點一下看電話與付款資訊"><span class="nm">${esc(b.name)}</span><span class="sets">${b.addonQty} ${esc(CONFIG.addon.unit)}</span><span class="chev">▾</span></button>
       <div class="kit-meta">${when}</div>
-      ${pickLine(b) ? `<div style="font-weight:700;margin-top:4px">🍽 ${esc(pickLine(b))}</div>` : ""}
+      ${pickLine(b) ? `<div style="font-weight:700;margin-top:4px">🍽 ${pickHtml(b)}</div>` : ""}
       ${snackLine(b) ? `<div style="font-weight:700;margin-top:4px">🍱 單點輕食：${esc(snackLine(b))}</div>` : ""}
       <div class="kit-quick" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center">
         <span>📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</span>
@@ -3678,7 +3684,7 @@ function renderCiPending(){
         <div>${esc(ses ? ses.label + " " + ses.time : "")}・預計 ${esc(b.arrival || "—")} 抵達</div>
         <div>大人 ${+b.adults || 0}・孩童 ${+b.children || 0}${pets ? `・毛小孩 ${pets} 隻` : ""}・車 ${carsOf(b)} 輛</div>
         <div>${esc(CONFIG.addon.name)}：${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}` : "無"}${extrasText(b) ? `・${esc(extrasText(b))}` : ""}</div>
-        ${pickLine(b) ? `<div>🍽 <b>${esc(pickLine(b))}</b></div>` : ""}
+        ${pickLine(b) ? `<div>🍽 <b>${pickHtml(b)}</b></div>` : ""}
         <div>預約代號 ${esc(b.code)}・預估 ${money(b.total)}${b.email ? `・${esc(b.email)}` : ""}</div>
         ${prepayHtml(b)}
         ${b.note ? `<div style="color:var(--muted)">客人備註：${esc(b.note)}</div>` : ""}
@@ -3707,7 +3713,7 @@ function ciSearch(){
       <div class="ci-total"><span>門票總金額</span><b data-total>${money(ticketTotal(b.date, b.adults, b.children, petsOf(b)))}</b></div>
       <div class="ci-fine">不含野餐套組費用</div>
       <div class="ci-kit"><span>野餐套組</span><b>${b.addonQty ? `${b.addonQty} ${esc(CONFIG.addon.unit)}（費用另計）` : "無"}</b></div>
-      ${pickLine(b) ? `<div class="ci-kit"><span>套組內容</span><b style="font-size:18px">${esc(pickLine(b))}</b></div>` : ""}
+      ${pickLine(b) ? `<div class="ci-kit"><span>套組內容</span><b style="font-size:18px">${pickHtml(b)}</b></div>` : ""}
       ${prepayHtml(b)}
       ${b.adminNote ? `<div class="adm-note">📝 ${esc(b.adminNote)}</div>` : ""}
       <button class="btn ci-btn" data-ci-save>${k.checkedIn ? "更新人數" : "確認報到"}</button>
@@ -4200,7 +4206,7 @@ function exportStatsPdf(){
   const groups = [...new Set(list.map(b => sessionOf(b)))];
   groups.forEach(sid => {
     const rows = list.filter(b => sessionOf(b) === sid), ses = sessionById(sid), name = ses ? `${ses.label} ${ses.time}` : String(sid);
-    rows.forEach(b => { body += tr("", [esc(ses ? ses.label : name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大${+b.adults || 0}／童${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickLine(b) ? `<b>套組</b>：${esc(pickLine(b))}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("　")]); });
+    rows.forEach(b => { body += tr("", [esc(ses ? ses.label : name), esc(b.arrival || "—"), esc(b.name || "—"), `${(+b.adults || 0) + (+b.children || 0)}（大${+b.adults || 0}／童${+b.children || 0}）`, petsOf(b) || "", carsOf(b) || "", esc(b.phone || "—"), (+b.addonQty || 0) || "", [pickLine(b) ? `<b>套組</b>：${pickHtml(b)}` : "", b.note ? `<b>客人</b>：${esc(b.note)}` : "", b.adminNote ? `<b>店家</b>：${esc(b.adminNote)}` : ""].filter(Boolean).join("　")]); });
     const t = sum(rows); body += tr("sub", [esc(ses ? ses.label : sid) + " 小計", `${rows.length} 筆預約`, "", t.p, t.pets, t.cars, "", t.sets, ""]);
   });
   const T = sum(list); body += tr("tot", ["全天合計", `${list.length} 筆預約`, "", T.p, T.pets, T.cars, "", T.sets, ""]);
@@ -4224,11 +4230,12 @@ function exportMealPdf(){
   if(!list.length) return toast("這天沒有預約餐點的顧客", "err");
   const ord = b => { if(b.lodging) return 98 + (b.guest === "reciprocal" ? 1 : 0); const i = SESSIONS.findIndex(x => x.id === sessionOf(b)); return i < 0 ? 97 : i; };
   list.sort((a, b) => ord(a) - ord(b) || String(a.arrival || "").localeCompare(String(b.arrival || "")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  const numList = a => (Array.isArray(a) ? a : []).map((v, i) => `${"①②③④⑤⑥⑦⑧⑨⑩"[i] || (i + 1) + "."}${esc(v)}`).join(" ");
   const kind = b => b.lodging ? (b.guest === "reciprocal" ? "互惠客" : "住宿客") : (b.walkin ? "現場客" : ((sessionById(sessionOf(b)) || {}).label || "一般"));
   const note = b => [b.note ? `客人：${esc(b.note)}` : "", b.adminNote ? `店家：${esc(b.adminNote)}` : ""].filter(Boolean).join("　");
   const tr = (cls, c) => `<tr class="${cls}">${c.map((x, i) => `<td${i === 4 ? ' class="n"' : ""}>${x}</td>`).join("")}</tr>`;
   let body = "";
-  list.forEach(b => { body += tr("", [esc(kind(b)), esc(b.arrival || "—"), esc(b.name || "—"), esc(b.phone || "—"), (+b.addonQty || 0) || "", esc(mainText(b)), esc(pickText(b)), snackText(b), note(b)]); });
+  list.forEach(b => { body += tr("", [esc(kind(b)), esc(b.arrival || "—"), esc(b.name || "—"), esc(b.phone || "—"), (+b.addonQty || 0) || "", numList(b.setMain), numList(b.setPick), snackText(b), note(b)]); });
   const sets = list.reduce((n, b) => n + (+b.addonQty || 0), 0);
   body += tr("tot", ["合計", `${list.length} 位顧客`, "", "", sets, "", "", "", ""]);
   const cnt = (f) => { const m = {}; list.forEach(b => f(b).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${esc(k)} ×${n}`).join("、"); };
