@@ -291,7 +291,8 @@
     #printArea table{table-layout:fixed}
     #printArea th,#printArea td{border:1px solid #777;padding:4px 4px;text-align:left;vertical-align:top;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     #printArea th{white-space:normal}
-    #printArea td:last-child{font-size:11px;white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip}
+    #printArea td:last-child,#printArea table.meal td:nth-child(n+6),#printArea tr.tot td,#printArea tr.sub td{white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip}
+    #printArea td:last-child{font-size:11px}
     #printArea col.m1{width:7%}#printArea col.m2{width:7%}#printArea col.m3{width:10%}#printArea col.m4{width:11%}#printArea col.m5{width:5%}#printArea col.m6{width:15%}#printArea col.m7{width:17%}#printArea col.m8{width:14%}#printArea col.m9{width:14%}
     #printArea col.c1{width:8%}#printArea col.c2{width:8%}#printArea col.c3{width:13%}#printArea col.c4{width:15%}#printArea col.c5{width:7%}#printArea col.c6{width:6%}#printArea col.c7{width:13%}#printArea col.c8{width:7%}#printArea col.c9{width:23%}
     #printArea th{background:#eee}
@@ -506,7 +507,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BG</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BH</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
