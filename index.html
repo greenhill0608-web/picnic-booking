@@ -358,6 +358,11 @@
         <span>若預約當日，請來電</span>
         <a class="call-btn" href="tel:0918273858" aria-label="撥打電話 0918273858">📞 0918-273-858</a>
       </div>
+      <div class="call-box hidden" id="sdBox" style="margin-top:8px">
+        <span id="sdTxt">🕘 今天要臨時入園？（只能入園，不能預訂餐食）</span>
+        <button type="button" class="btn small" id="sdOpen">申請當日臨時預約</button>
+        <a class="call-btn hidden" id="sdCall" href="tel:0918273858">📞 0918-273-858</a>
+      </div>
       <input type="hidden" id="date">
       <div id="dateMsg"></div>
 
@@ -507,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BH</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BJ</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -612,6 +617,15 @@
         </div>
         <div class="hint" id="dpStat"></div>
         <div id="dpList" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card" id="sdCard">
+        <h2>當日臨時申請<span class="ci-badge" id="sdCount" style="font-size:13px;margin-left:8px"></span></h2>
+        <div class="hint" style="margin:0 0 8px">客人在預約頁申請「今天」臨時入園（只能入園，不含餐食）。申請<b>不佔名額</b>，你按「同意」才會變成正式預約並佔名額；按「婉拒」則客人用電話查詢時會看到「未能接受」。每天自動清空。</div>
+        <label class="inline"><input type="checkbox" id="setSameDay"><span>開放客人申請當日臨時預約</span></label>
+        <div class="row" style="margin:8px 0"><button type="button" class="btn ghost small" id="sdReload">重新整理</button><button type="button" class="btn small" id="sdSave">儲存開關</button></div>
+        <div id="sdMsg"></div>
+        <div id="sdList" style="margin-top:8px"></div>
       </div>
 
       <div class="card" id="dailyCard">
@@ -2043,6 +2057,7 @@ function renderInfo(S){
 
 function renderCalendar(){
   const S = Store.settings();
+  renderSameDayBtn();
   const used = Store.usedMap();
   const [, mx] = windowRange(S);
   const t = new Date();
@@ -2353,7 +2368,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindBulk(); bindCheckin(); bindDaily(); bindDeposits(); makeFoldable(); bindCustomerEdit(); bindProxy();
+  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindBulk(); bindCheckin(); bindDaily(); bindDeposits(); bindSameDay(); makeFoldable(); bindCustomerEdit(); bindProxy();
   $("ctSave").addEventListener("click", saveContent);
   $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
@@ -2632,8 +2647,8 @@ function doLookup(){
   if(Store.api && !doLookup.fresh){
     const ph = $("qPhone").value.trim(), cd = $("qCode").value.trim();
     if(!/^09\d{8}$/.test(ph) && !(ph === "" && /^\d{9}$/.test(cd))){ $("qResult").innerHTML = ""; return msg($("qMsg"), "請輸入手機號碼，或輸入 9 碼預約代號", "err"); }
-    msg($("qMsg"), "查詢中…", "ok");
-    const job = GH.adminToken() ? Store.load() : API.call("POST", "/api/lookup", { phone: ph, code: cd }).then(r => { Store._b = r.bookings || []; });
+    msg($("qMsg"), "查詢中…", "ok"); doLookup.reqs = [];
+    const job = GH.adminToken() ? Store.load() : API.call("POST", "/api/lookup", { phone: ph, code: cd }).then(r => { Store._b = r.bookings || []; doLookup.reqs = r.requests || []; });
     return job.then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), e.message, "err"));
   }
   if(Store.remote && !Store.api && !doLookup.fresh){ msg($("qMsg"), "查詢中…", "ok"); return Store.load().then(() => { doLookup.fresh = true; try{ doLookup(); } finally { doLookup.fresh = false; } }).catch(e => msg($("qMsg"), "無法連線 GitHub：" + e.message, "err")); }
@@ -2646,9 +2661,10 @@ function doLookup(){
   // 排序：未取消且還沒到的預約排最前面（日期近的在上）→ 未取消但已過期 → 已取消（各組內新的在上）
   { const td = todayStr(), rank = b => b.status === "cancelled" ? 2 : (b.date >= td ? 0 : 1);
     list.sort((a,b) => rank(a) - rank(b) || (rank(a) === 0 ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date))); }
-  if(!list.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼或代號", "err"); }
-  msg($("qMsg"), `找到 ${list.length} 筆預約`, "ok");
-  $("qResult").innerHTML = list.map(b => bookingCard(b, false)).join("");
+  const reqs = byCode ? [] : (doLookup.reqs || []);
+  if(!list.length && !reqs.length){ $("qResult").innerHTML = ""; return msg($("qMsg"), "查無預約資料，請確認手機號碼或代號", "err"); }
+  msg($("qMsg"), `找到 ${list.length} 筆預約` + (reqs.length ? `、${reqs.length} 筆當日臨時申請` : ""), "ok");
+  $("qResult").innerHTML = reqs.map(reqCardHtml).join("") + list.map(b => bookingCard(b, false)).join("");
 }
 
 /* ========= 後台 ========= */
@@ -2837,7 +2853,7 @@ function renderKit(){
   const logged = isAdminLogged();
   $("kitGate").classList.toggle("hidden", logged); $("kitMain").classList.toggle("hidden", !logged); $("lodgeCard").classList.toggle("hidden", !logged); $("setsCard").classList.toggle("hidden", !logged);
   if(!logged) return;
-  renderDeposits(); renderTomorrowSets();
+  renderDeposits(); renderTomorrowSets(); renderSameDay();
   const f = $("kDate").value, flt = $("kFilter").value;
   let all = Store.all().filter(b => b.status === "confirmed" && b.addonQty > 0);
   const held = all.filter(b => b.date >= todayStr()).reduce((sum, b) => { const k = kitOf(b); return sum + (k.depositReturned ? 0 : (k.deposit || 0)); }, 0);
@@ -3103,6 +3119,119 @@ function bindKit(){
     saveKit(row.dataset.kit, el.dataset.kf, el.type === "checkbox" ? el.checked : el.value, el);
   });
 }
+/* ========= 當日臨時申請（客人只能申請入園，不含餐食；店家同意後才成立）========= */
+function sdAvailable(){
+  const S = Store.settings(); if(!Store.api || S.sameDayOn === false) return [];
+  const td = todayStr(), r = dayRule(td, S), now = new Date(), hm = toTime(now.getHours()*60 + now.getMinutes());
+  return SESSIONS.filter(x => r.sessions[x.id].open && Math.max(0, r.sessions[x.id].cap - Store.used(td, x.id)) > 0 && arrivalOptions(x.id).some(t => t >= hm));
+}
+function sdAnyOpenToday(){   // 今天有開放、時間還沒過的場次（不論是否額滿）
+  const S = Store.settings(); if(!Store.api || S.sameDayOn === false) return false;
+  const td = todayStr(), r = dayRule(td, S), now = new Date(), hm = toTime(now.getHours()*60 + now.getMinutes());
+  return SESSIONS.some(x => r.sessions[x.id].open && arrivalOptions(x.id).some(t => t >= hm));
+}
+function renderSameDayBtn(){
+  const b = $("sdBox"); if(!b) return;
+  const av = sdAvailable().length, full = !av && sdAnyOpenToday();
+  b.classList.toggle("hidden", !av && !full);
+  $("sdTxt").textContent = full ? "🈵 今天名額已額滿，無法線上申請，請直接來電洽詢" : "🕘 今天要臨時入園？（只能入園，不能預訂餐食）";
+  $("sdOpen").classList.toggle("hidden", full);
+  $("sdCall").classList.toggle("hidden", !full);
+}
+const sdStatusText = r => r.status === "rejected" ? "❌ 未能接受，請來電洽詢" : "⏳ 等候店家確認中，確認後會以電話聯絡您";
+function reqCardHtml(r){
+  const ses = sessionById(r.session);
+  return `<div class="booking" style="border-left-color:#e0a030;background:#fff8e6"><div class="top"><span>${esc(showDate(r.date))}　${esc(ses ? ses.label : "")}</span><span><b>當日臨時申請</b></span></div>
+    <div>預計抵達 ${esc(r.arrival)}・大人 ${r.adults}・孩童 ${r.children}${r.pets ? `・毛小孩 ${r.pets} 隻` : ""}・車 ${r.cars} 輛</div>
+    <div style="margin-top:4px"><b>${sdStatusText(r)}</b></div></div>`;
+}
+function openSameDay(){
+  const av = sdAvailable(); if(!av.length) return toast("目前沒有可申請的場次，請來電洽詢", "err");
+  const old = document.getElementById("sdPop"); if(old) old.remove();
+  const td = todayStr(), now = new Date(), hm = toTime(now.getHours()*60 + now.getMinutes()), S = Store.settings();
+  const opt = (n, lo, hi, f) => Array.from({ length: hi - lo + 1 }, (_, i) => `<option value="${lo + i}">${f ? f(lo + i) : lo + i}</option>`).join("");
+  const kids = isPetDay(td) && Number(CONFIG.petDayMinAge) > 0;
+  const el = document.createElement("div"); el.id = "sdPop"; el.className = "done-overlay";
+  el.innerHTML = `<div class="done-box"><div class="done-panel" style="text-align:left">
+    <h2 style="margin-top:0">🕘 當日臨時預約申請</h2>
+    <div class="msg err" style="margin:0 0 10px">⚠️ 只能申請入園，<b>無法預訂野餐套組、輕食等餐食</b>。申請送出後需等店家確認，確認後才算成立，入園費用現場收取。</div>
+    <div id="sdBody">
+      <label for="sdSes" style="margin-top:0">場次（${esc(showDate(td))}）</label><select id="sdSes">${av.map(x => `<option value="${esc(x.id)}">${esc(x.label)} ${esc(x.time)}</option>`).join("")}</select>
+      <label for="sdArr">預計抵達時間</label><select id="sdArr"></select>
+      <div class="grid2"><div><label for="sdA">大人</label><select id="sdA">${opt(0, 1, 15, n => n + " 位")}</select></div><div><label for="sdC">孩童</label><select id="sdC">${opt(0, 0, 15, n => n + " 位")}</select></div></div>
+      <div class="grid2"><div><label for="sdP">毛小孩</label><select id="sdP">${opt(0, 0, CONFIG.maxPets, n => n ? n + " 隻" : "不帶")}</select></div><div><label for="sdCar">車輛</label><select id="sdCar">${opt(0, 0, CONFIG.maxCars, n => n + " 輛")}</select></div></div>
+      <label for="sdN">姓名</label><input id="sdN" maxlength="40" autocomplete="name">
+      <label for="sdPh">手機號碼</label><input id="sdPh" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="09 開頭共 10 碼">
+      <label for="sdNote">備註（選填）</label><input id="sdNote" maxlength="300">
+      ${kids ? `<label class="inline" style="margin-top:10px"><input type="checkbox" id="sdKids"><span>今天是毛小孩野餐日，我確認同行孩童皆已滿 ${CONFIG.petDayMinAge} 歲</span></label>` : ""}
+      <div id="sdOut" style="margin-top:8px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn" id="sdSend" style="flex:1">送出申請</button><button type="button" class="btn ghost" id="sdNo" style="flex:1">取消</button></div>
+    </div></div></div>`;
+  document.body.appendChild(el);
+  const fillArr = () => { const o = arrivalOptions($("sdSes").value).filter(t => t >= hm); $("sdArr").innerHTML = o.map(t => `<option>${esc(t)}</option>`).join(""); };
+  fillArr(); $("sdSes").onchange = fillArr;
+  $("sdNo").onclick = () => el.remove();
+  $("sdSend").onclick = async () => {
+    const out = $("sdOut"), v = id => $(id).value.trim();
+    const x = { session: v("sdSes"), arrival: v("sdArr"), adults: +v("sdA"), children: +v("sdC"), pets: +v("sdP"), cars: +v("sdCar"), name: v("sdN"), phone: v("sdPh"), note: v("sdNote"), kidsOk: !!($("sdKids") && $("sdKids").checked) };
+    if(!x.arrival) return msg(out, "請選擇預計抵達時間", "err");
+    { const rem = Math.max(0, dayRule(td, Store.settings()).sessions[x.session].cap - Store.used(td, x.session)); if(x.adults + x.children > rem) return msg(out, `今天此場次剩餘名額 ${rem} 位，不足 ${x.adults + x.children} 位，請改少一點或來電洽詢`, "err"); }
+    if(!x.name) return msg(out, "請填寫姓名", "err");
+    if(!/^09\d{8}$/.test(x.phone)) return msg(out, "請輸入正確的手機號碼（09 開頭共 10 碼）", "err");
+    if(x.pets > 0 && isNoPetDay(td)) return msg(out, "今天不開放寵物入園", "err");
+    if(kids && x.children > 0 && !x.kidsOk) return msg(out, `毛小孩野餐日不開放 ${CONFIG.petDayMinAge} 歲以下小孩，請勾選確認`, "err");
+    const btn = $("sdSend"); btn.disabled = true; msg(out, "送出中…", "ok");
+    try{
+      const r = await API.call("POST", "/api/walkreq", x);
+      $("sdBody").innerHTML = `<div style="text-align:center;padding:8px 0"><div style="font-size:42px">📨</div><h3 style="margin:6px 0">申請已送出</h3>
+        <div>請等候店家確認，確認後會以電話聯絡您（${esc(x.phone)}）。</div>
+        <div class="hint" style="margin:8px 0">也可以到上方「查詢預約」輸入手機號碼，看申請結果。若很急，請直接來電 <a href="tel:0918273858">0918-273-858</a>。</div>
+        <button type="button" class="btn" id="sdDone" style="margin-top:8px">我知道了</button></div>`;
+      $("sdDone").onclick = () => el.remove();
+    }catch(e){ btn.disabled = false; msg(out, e.message, "err"); }
+  };
+}
+/* ----- 後台：當日臨時申請 ----- */
+let sdBusy = false;
+async function renderSameDay(){
+  if(!$("sdList") || !Store.api || !isAdminLogged() || sdBusy) return;
+  $("setSameDay").checked = Store.settings().sameDayOn !== false;
+  sdBusy = true; let j;
+  try{ j = await API.call("GET", "/api/admin/walkreqs", undefined, true); }catch(e){ sdBusy = false; $("sdList").innerHTML = `<div class="hint">無法讀取：${esc(e.message)}</div>`; return; }
+  sdBusy = false;
+  const items = j.items || [], pend = items.filter(i => i.status === "pending");
+  $("sdCount").textContent = pend.length ? `${pend.length} 筆待處理` : ""; $("sdCount").classList.toggle("hidden", !pend.length);
+  $("sdList").innerHTML = items.length ? items.slice().sort((a, b) => (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) || String(a.createdAt).localeCompare(String(b.createdAt))).map(i => {
+    const ses = sessionById(i.session);
+    return `<div class="kit-row ${i.status === "pending" ? "" : "done"}" data-sd="${esc(i.id)}">
+      <div class="top"><span>${esc(ses ? ses.label : "")}　預計 ${esc(i.arrival)} 抵達</span><span>${i.status === "pending" ? "⏳ 待處理" : "已婉拒"}</span></div>
+      <div>${esc(i.name)}　<a href="tel:${esc(i.phone)}">${esc(i.phone)}</a>・大人 ${i.adults}・孩童 ${i.children}${i.pets ? `・毛小孩 ${i.pets}` : ""}・車 ${i.cars}・預估 ${esc(money(i.total || 0))}</div>
+      ${i.note ? `<div class="hint" style="margin:2px 0">客人備註：${esc(i.note)}</div>` : ""}
+      ${i.status === "pending" ? `<div class="kit-ctl"><button type="button" class="btn small" data-sda="approve">同意</button><button type="button" class="btn danger small" data-sda="reject">婉拒</button></div>` : ""}
+    </div>`; }).join("") : `<div class="hint">今天沒有臨時申請</div>`;
+}
+function bindSameDay(){
+  if($("sdOpen")) $("sdOpen").addEventListener("click", openSameDay);
+  if(!$("sdList")) return;
+  $("sdReload").addEventListener("click", renderSameDay);
+  $("sdSave").addEventListener("click", () => { const S = Store.settings(); S.sameDayOn = $("setSameDay").checked; Store.saveSettings(S); msg($("sdMsg"), S.sameDayOn ? "已開放客人申請當日臨時預約" : "已關閉當日臨時申請", "ok"); renderSameDayBtn(); });
+  $("sdList").addEventListener("click", e => {
+    const btn = e.target.closest("[data-sda]"), row = e.target.closest("[data-sd]"); if(!btn || !row) return;
+    const act = btn.dataset.sda, id = row.dataset.sd, force = btn.dataset.force === "1";
+    twoStep(btn, act === "approve" ? (force ? "再按一次：超額同意" : "再按一次：同意") : "再按一次：婉拒", async () => {
+      try{
+        await API.call("POST", "/api/admin/walkreq-decide", { id, action: act, force }, true);
+        toast(act === "approve" ? "已同意，已轉為正式預約" : "已婉拒", "ok");
+        if(act === "approve") await Store.load().catch(() => {});
+        renderSameDay(); if(typeof renderAdminList === "function") renderAdminList();
+      }catch(er){
+        if(act === "approve" && er.status === 409){ btn.dataset.force = "1"; btn.textContent = "名額不足，仍要同意？"; btn.dataset.orig = "名額不足，仍要同意？"; toast(er.message + "（再按同意可超額加入）", "err"); }
+        else toast(er.message, "err");
+      }
+    });
+  });
+  setInterval(() => { if(!document.hidden) renderSameDay(); }, 45000);
+}
 /* ========= 後台：待確認訂金 ========= */
 function renderDeposits(){
   if(!$("dpList")) return;
@@ -3203,7 +3332,7 @@ function makeLayout(foldSaved){
   const keyOf = d => d.dataset.key;
   cards().forEach(d => { d.dataset.key = d.querySelector("summary h2").textContent.trim(); });
   // 卡片分組：營運（每天看的）／菜單與價格／通知與公告／維護；預設依分組排列，上方可只看某一組
-  const GROUPS = [["營運", ["預約清單", "當日統計", "📅 預約日曆", "待確認訂金", "每日入園人數", "每週場次", "指定日期設定", "毛小孩野餐日", "不開放寵物日期", "流量統計"]],
+  const GROUPS = [["營運", ["預約清單", "當日統計", "📅 預約日曆", "待確認訂金", "當日臨時申請", "每日入園人數", "每週場次", "指定日期設定", "毛小孩野餐日", "不開放寵物日期", "流量統計"]],
     ["菜單與價格", ["租借品項", "網站內容"]], ["通知與公告", ["活動公告", "📨 批量簡訊"]], ["維護", ["從舊系統匯入", "清理舊資料", "變更登入密碼", "帳號與資料管理"]]];
   const grpOf = k => { const i = GROUPS.findIndex(g => g[1].some(p => k.startsWith(p))); return i < 0 ? GROUPS.length - 1 : i; };
   cards().forEach(d => { const gi = grpOf(d.dataset.key); d.dataset.g = GROUPS[gi][0]; const tag = document.createElement("span"); tag.className = "gtag"; tag.textContent = GROUPS[gi][0]; d.querySelector("summary h2").appendChild(tag); });
