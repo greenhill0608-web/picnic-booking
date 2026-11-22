@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BM</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BN</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -2845,14 +2845,14 @@ function renderSnackMon(){
   const box = $("snackMon"); if(!box) return;
   const sn = extraItems().filter(it => it.snack), ids = new Set(sn.map(it => it.id));
   if(!sn.length){ box.innerHTML = ""; return; }
-  const tdy = todayStr();
-  const rows = Store.all().filter(b => b.status === "confirmed" && b.date >= tdy && sn.some(it => qtyOf(b, it.id) > 0))
+  const tdy = todayStr(), fd = ($("kDate") || {}).value || "";      // 上面選了日期就只顯示那一天，沒選才顯示今天以後
+  const rows = Store.all().filter(b => b.status === "confirmed" && (fd ? b.date === fd : b.date >= tdy) && sn.some(it => qtyOf(b, it.id) > 0))
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.arrival || "").localeCompare(String(b.arrival || "")));
   const tot = sn.map(it => ({ it, n: rows.reduce((s, b) => s + qtyOf(b, it.id), 0) })).filter(x => x.n > 0);
   const txt = b => sn.filter(it => qtyOf(b, it.id) > 0).map(it => `${esc(it.name)} ${qtyOf(b, it.id)} ${esc(it.unit)}`).join("・");
-  box.innerHTML = `<div style="border-top:2px dashed var(--line);padding-top:12px"><b>🍱 單點輕食預約</b><span style="color:var(--muted)">（今天以後，${rows.length} 筆）</span>
+  box.innerHTML = `<div style="border-top:2px dashed var(--line);padding-top:12px"><b>🍱 單點輕食預約</b><span style="color:var(--muted)">（${fd ? esc(showDate(fd)) : "今天以後"}，${rows.length} 筆）</span>
     ${tot.length ? `<div class="hint" style="margin:6px 0">合計：${tot.map(x => `${esc(x.it.name)} ${x.n} ${esc(x.it.unit)}`).join("、")}</div>` : ""}
-    ${rows.length ? rows.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="kit-row"><div class="kit-name" style="cursor:default"><span class="nm">${esc(b.name)}</span></div><div class="kit-meta">${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "")}</div><div style="font-weight:700;margin-top:4px">${txt(b)}</div><div style="margin-top:4px">📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</div></div>`; }).join("") : `<div class="hint">目前沒有人預約單點輕食</div>`}</div>`;
+    ${rows.length ? rows.map(b => { const ses = sessionById(sessionOf(b)); return `<div class="kit-row"><div class="kit-name" style="cursor:default"><span class="nm">${esc(b.name)}</span></div><div class="kit-meta">${esc(showDate(b.date))}　${esc(ses ? ses.label : "")}・預計 ${esc(b.arrival || "")}</div><div style="font-weight:700;margin-top:4px">${txt(b)}</div><div style="margin-top:4px">📞 ${b.phone ? `<a href="tel:${esc(b.phone)}">${esc(b.phone)}</a>` : "沒留電話"}</div></div>`; }).join("") : `<div class="hint">${fd ? "這天沒有人預約單點輕食" : "目前沒有人預約單點輕食"}</div>`}</div>`;
 }
 function renderKit(){
   if(!$("kitList")) return;
