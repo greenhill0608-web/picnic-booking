@@ -293,7 +293,7 @@
     #printArea th{white-space:normal}
     #printArea td:last-child,#printArea table.meal td:nth-child(n+6),#printArea tr.tot td,#printArea tr.sub td{white-space:normal;word-break:break-all;overflow:visible;text-overflow:clip}
     #printArea td:last-child{font-size:11px}
-    #printArea col.m1{width:7%}#printArea col.m2{width:7%}#printArea col.m3{width:10%}#printArea col.m4{width:11%}#printArea col.m5{width:5%}#printArea col.m6{width:15%}#printArea col.m7{width:17%}#printArea col.m8{width:14%}#printArea col.m9{width:14%}
+    #printArea col.m1{width:7%}#printArea col.m2{width:6%}#printArea col.m3{width:9%}#printArea col.m4{width:10%}#printArea col.m5{width:4%}#printArea col.m6{width:10%}#printArea col.m7{width:13%}#printArea col.m8{width:15%}#printArea col.m9{width:13%}#printArea col.m10{width:13%}
     #printArea col.c1{width:8%}#printArea col.c2{width:8%}#printArea col.c3{width:13%}#printArea col.c4{width:15%}#printArea col.c5{width:7%}#printArea col.c6{width:6%}#printArea col.c7{width:13%}#printArea col.c8{width:7%}#printArea col.c9{width:23%}
     #printArea th{background:#eee}
     #printArea td.n,#printArea th.n{text-align:center}
@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BK</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BM</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -2898,7 +2898,7 @@ function renderKit(){
       ${b.note ? `<div style="color:var(--muted);white-space:pre-wrap;margin-top:6px">客人備註：${esc(b.note)}</div>` : ""}
       ${b.adminNote ? `<div class="adm-note">📝 店家備註：${esc(b.adminNote)}</div>` : ""}
       <div class="kit-big">
-        ${due ? `<label class="kit-tg"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金</span></label>` : ""}
+        ${due ? `<label class="kit-tg"><input type="checkbox" data-kf="depositPaid" ${k.depositPaid ? "checked" : ""}><span>已付訂金 ${money(due)}</span></label>` : ""}
         <label class="kit-tg"><input type="checkbox" data-kf="pickedUp" ${k.pickedUp ? "checked" : ""}><span>已取餐</span></label>
         <label class="kit-tg"><input type="checkbox" data-kf="depositHeld" ${k.deposit > 0 ? "checked" : ""}><span>已收押金 $${k.deposit > 0 ? k.deposit : dep}</span></label>
         <label class="kit-tg"><input type="checkbox" data-kf="depositReturned" ${k.depositReturned ? "checked" : ""} ${k.deposit > 0 ? "" : "disabled"}><span>押金已退</span></label>
@@ -4381,20 +4381,24 @@ function exportMealPdf(){
   const kind = b => b.lodging ? (b.guest === "reciprocal" ? "互惠客" : "住宿客") : (b.walkin ? "現場客" : ((sessionById(sessionOf(b)) || {}).label || "一般"));
   const note = b => [b.note ? `客人：${esc(b.note)}` : "", b.adminNote ? `店家：${esc(b.adminNote)}` : ""].filter(Boolean).join("　");
   const tr = (cls, c) => `<tr class="${cls}">${c.map((x, i) => `<td${i === 4 ? ' class="n"' : ""}>${x}</td>`).join("")}</tr>`;
+  const depOf = b => b.lodging ? 0 : depositDue(+b.addonQty || 0);
+  const depText = b => { const d = depOf(b); return d ? `${kitOf(b).depositPaid ? "已付" : "未付"} ${money(d)}` : "—"; };
   let body = "";
-  list.forEach(b => { body += tr("", [esc(kind(b)), esc(b.arrival || "—"), esc(b.name || "—"), esc(b.phone || "—"), (+b.addonQty || 0) || "", numList(b.setMain), numList(b.setPick), snackText(b), note(b)]); });
+  list.forEach(b => { body += tr("", [esc(kind(b)), esc(b.arrival || "—"), esc(b.name || "—"), esc(b.phone || "—"), (+b.addonQty || 0) || "", esc(depText(b)), numList(b.setMain), numList(b.setPick), snackText(b), note(b)]); });
   const sets = list.reduce((n, b) => n + (+b.addonQty || 0), 0);
-  body += tr("tot", ["合計", `${list.length} 位顧客`, "", "", sets, "", "", "", ""]);
+  const depPaid = list.reduce((n, b) => n + (kitOf(b).depositPaid ? depOf(b) : 0), 0), depAll = list.reduce((n, b) => n + depOf(b), 0);
+  body += tr("tot", ["合計", `${list.length} 位顧客`, "", "", sets, depAll ? `已收 ${money(depPaid)}` : "", "", "", "", ""]);
   const cnt = (f) => { const m = {}; list.forEach(b => f(b).forEach(v => { m[v] = (m[v] || 0) + 1; })); return Object.entries(m).map(([k, n]) => `${esc(k)} ×${n}`).join("、"); };
   const sn = {}; list.forEach(b => snacks.forEach(it => { const q = qtyOf(b, it.id); if(q > 0) sn[it.name] = (sn[it.name] || 0) + q; }));
   const lines = [
     mainCfg().on && cnt(b => Array.isArray(b.setMain) ? b.setMain : []) ? `<div><b>${esc(mainCfg().title)}合計</b>：${cnt(b => Array.isArray(b.setMain) ? b.setMain : [])}</div>` : "",
     cnt(b => Array.isArray(b.setPick) ? b.setPick : []) ? `<div><b>${esc(setChoiceCfg().title)}合計</b>：${cnt(b => Array.isArray(b.setPick) ? b.setPick : [])}</div>` : "",
+    depAll ? `<div><b>訂金</b>：應收 ${money(depAll)}，已收 ${money(depPaid)}，未收 ${money(depAll - depPaid)}</div>` : "",
     Object.keys(sn).length ? `<div><b>單點輕食合計</b>：${Object.entries(sn).map(([k, n]) => `${esc(k)} ×${n}`).join("、")}</div>` : ""].filter(Boolean).join("");
   const now = new Date();
   $("printArea").innerHTML = `<h1>${esc(CONFIG.siteName)}　餐點清單</h1>
     <div class="pr-sub">${esc(showDate(date))}　・　共 ${list.length} 位顧客、${sets} ${esc(CONFIG.addon.unit)}${esc(CONFIG.addon.name)}（含住宿客／互惠客）　・　列印時間 ${esc(fmtTime(now.toISOString()))}</div>
-    <table class="meal"><colgroup>${[1,2,3,4,5,6,7,8,9].map(i => `<col class="m${i}">`).join("")}</colgroup><thead><tr><th>類別</th><th>入園</th><th>姓名</th><th>電話</th><th class="n">${esc(CONFIG.addon.unit)}</th><th>${esc(mainCfg().title)}</th><th>${esc(setChoiceCfg().title)}</th><th>單點輕食</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>
+    <table class="meal"><colgroup>${[1,2,3,4,5,6,7,8,9,10].map(i => `<col class="m${i}">`).join("")}</colgroup><thead><tr><th>類別</th><th>入園</th><th>姓名</th><th>電話</th><th class="n">${esc(CONFIG.addon.unit)}</th><th>訂金</th><th>${esc(mainCfg().title)}</th><th>${esc(setChoiceCfg().title)}</th><th>單點輕食</th><th>備註</th></tr></thead><tbody>${body}</tbody></table>
     <div style="margin-top:10px;line-height:1.7">${lines}</div>`;
   const oldTitle = document.title; document.title = `餐點清單-${date}`;
   const restore = () => { document.title = oldTitle; $("printArea").innerHTML = ""; window.removeEventListener("afterprint", restore); };
