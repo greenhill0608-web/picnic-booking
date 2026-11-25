@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BN</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BP</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -617,6 +617,24 @@
         </div>
         <div class="hint" id="dpStat"></div>
         <div id="dpList" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card" id="mealCard">
+        <h2>平日餐飲／套組開關（週一～週五）</h2>
+        <div class="hint" style="margin:0 0 8px"><b>開啟</b>＝該天客人可預約野餐套組與單點輕食，大人票價同假日（可折抵），套組第二主食固定為「<span id="mlFixed"></span>」。<b>關閉</b>＝平日價，沒有餐飲、不能訂套組。週六、週日不受影響。</div>
+        <h2 class="sec" style="margin-top:6px">每週固定</h2>
+        <div id="mlWeek" style="display:flex;flex-direction:column;gap:6px"></div>
+        <button class="btn small" id="mlSaveWeek" style="margin-top:8px">儲存每週設定</button>
+        <h2 class="sec" style="margin-top:16px">指定日期（單日或一段期間）</h2>
+        <div class="grid2">
+          <div><label for="mlFrom" style="margin-top:0">開始日期</label><input type="date" id="mlFrom"></div>
+          <div><label for="mlTo" style="margin-top:0">結束日期（單日可不填）</label><input type="date" id="mlTo"></div>
+        </div>
+        <label for="mlMode">這些日期</label>
+        <select id="mlMode"><option value="normal">開啟餐飲與套組（大人原價、可折抵）</option><option value="low">關閉（平日價，無餐飲）</option></select>
+        <button class="btn" id="mlApply">套用到這些日期</button>
+        <div id="mlMsg"></div>
+        <div class="hint">已設定的指定日期，可到「票價模式（指定日期）」查看或移除。若指定日期落在週六、週日，也會照你選的設定。</div>
       </div>
 
       <div class="card" id="sdCard">
@@ -1194,7 +1212,7 @@ const CONFIG = {
   petRule: "戶外草原野餐區需繫繩，以不干擾其他訪客為前提，並請清理排泄物",
   petDayRule: "本日為毛小孩野餐日：毛小孩不強制繫繩，可在園區自由活動，請主人隨時留意並清理排泄物",
   petDayNote: "本日為毛小孩野餐日，園區內會有較多毛小孩自由活動；若您或同行者害怕動物、對毛髮過敏，請斟酌是否預約。",
-  petDayMinAge: 10,                         // 毛小孩野餐日：為確保安全，不開放幾歲以下小孩入園（0 = 不限制）；後台「網站內容」可改
+  petDayMinAge: 0,                          // 毛小孩野餐日：不開放幾歲以下小孩入園（0 = 不限制；已取消 10 歲限制）；後台「網站內容」可改
 
   announce: { on:true, title:"活動公告", auto:true, lines:[] },   // 預約頁最上方的公告；後台「活動公告」可編輯
   infoLines: [],                            // 其他說明（營業場次、預約期間、入園費會自動產生）；後台「網站內容」可編輯
@@ -1223,6 +1241,7 @@ function applyContent(){
   setTimeout(() => { try{ syncCheckinBtn(); }catch(e){} }, 0);
   const D = JSON.parse(JSON.stringify(CONTENT_DEFAULTS));
   CONTENT_SIMPLE.forEach(k => { CONFIG[k] = (c[k] !== undefined && c[k] !== null) ? c[k] : D[k]; });
+  if(CONFIG.petDayMinAge === 10) CONFIG.petDayMinAge = 0;      // 舊的 10 歲限制已取消（舊設定值 10 一律視為不限制）
   CONFIG.addon = Object.assign({}, D.addon, c.addon || {});
   SESSIONS.forEach(x => {
     const d = D.sessions.find(y => y.id === x.id) || {}, o = (c.sessions || {})[x.id] || {};
@@ -2374,7 +2393,7 @@ function bind(){
       $("newPw").value = $("newPw2").value = ""; msg(out, "密碼已更新，下次請用新密碼登入", "ok");
     }catch(e){ msg(out, "更新失敗：" + e.message, "err"); }
   });
-  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindBulk(); bindCheckin(); bindDaily(); bindDeposits(); bindSameDay(); makeFoldable(); bindCustomerEdit(); bindProxy();
+  bindEdit(); bindPurge(); bindKit(); bindWalk(); bindBulk(); bindCheckin(); bindDaily(); bindDeposits(); bindSameDay(); bindMeal(); makeFoldable(); bindCustomerEdit(); bindProxy();
   $("ctSave").addEventListener("click", saveContent);
   $("ctInfoReset").addEventListener("click", () => { infoEditorFill(autoInfoTemplate(), true); toast("已還原為預設內容，按「儲存」後生效", "ok"); });
   $("ctReset").addEventListener("click", e => twoStep(e.currentTarget, "再按一次確認還原", resetContent));
@@ -3349,7 +3368,7 @@ function makeLayout(foldSaved){
   const keyOf = d => d.dataset.key;
   cards().forEach(d => { d.dataset.key = d.querySelector("summary h2").textContent.trim(); });
   // 卡片分組：營運（每天看的）／菜單與價格／通知與公告／維護；預設依分組排列，上方可只看某一組
-  const GROUPS = [["營運", ["預約清單", "當日統計", "📅 預約日曆", "待確認訂金", "當日臨時申請", "每日入園人數", "每週場次", "指定日期設定", "毛小孩野餐日", "不開放寵物日期", "流量統計"]],
+  const GROUPS = [["營運", ["預約清單", "當日統計", "📅 預約日曆", "待確認訂金", "當日臨時申請", "平日餐飲／套組開關", "每日入園人數", "每週場次", "指定日期設定", "毛小孩野餐日", "不開放寵物日期", "流量統計"]],
     ["菜單與價格", ["租借品項", "網站內容"]], ["通知與公告", ["活動公告", "📨 批量簡訊"]], ["維護", ["從舊系統匯入", "清理舊資料", "變更登入密碼", "帳號與資料管理"]]];
   const grpOf = k => { const i = GROUPS.findIndex(g => g[1].some(p => k.startsWith(p))); return i < 0 ? GROUPS.length - 1 : i; };
   cards().forEach(d => { const gi = grpOf(d.dataset.key); d.dataset.g = GROUPS[gi][0]; const tag = document.createElement("span"); tag.className = "gtag"; tag.textContent = GROUPS[gi][0]; d.querySelector("summary h2").appendChild(tag); });
@@ -4529,6 +4548,7 @@ function renderSettings(){
   if(Store.remote && !S.wdMode && Object.keys(Store._modes || {}).length){ S.wdMode = seed.wdMode; S.modeByDate = seed.modeByDate; Store.saveSettings(S); }   // 舊的平日設定一次轉成新的票價模式（結果與原本完全相同）
   $("setMin").value = S.minAdvanceDays;
   $("setMax").value = S.maxAdvanceDays;
+  renderMealCard();
   $("weeklyBox").innerHTML = ORDER.map(wd => `
     <div class="wday" data-wd="${wd}"><b>週${WEEK[wd]}</b>
       <label style="margin:4px 0 2px;font-size:14px">票價模式</label><select class="wd-mode"><option value="normal"${seed.wdMode[wd] !== "low" ? " selected" : ""}>一般（大人原價、可折抵、有餐飲）</option><option value="low"${seed.wdMode[wd] === "low" ? " selected" : ""}>平日價（無餐飲，不能訂套組）</option></select>
@@ -4594,6 +4614,33 @@ function addOverride(){
   msg(out, `已設定 ${days} 天`, "ok");
 }
 
+/* ----- 平日餐飲／套組開關（等同「票價模式」：開 = normal、關 = low）----- */
+function renderMealCard(){
+  if(!$("mlWeek")) return;
+  const sd = modeSeed();
+  $("mlFixed").textContent = setChoiceCfg().fixed || "";
+  $("mlWeek").innerHTML = [1, 2, 3, 4, 5].map(wd => `<label class="inline"><input type="checkbox" data-mlwd="${wd}" ${sd.wdMode[wd] !== "low" ? "checked" : ""}><span>週${WEEK[wd]}　開放餐飲與套組</span></label>`).join("");
+}
+function bindMeal(){
+  if(!$("mlWeek")) return;
+  $("mlSaveWeek").addEventListener("click", () => {
+    const S = Store.settings(), sd = modeSeed(), wdMode = Object.assign({}, sd.wdMode);
+    document.querySelectorAll("#mlWeek [data-mlwd]").forEach(c => { wdMode[+c.dataset.mlwd] = c.checked ? "normal" : "low"; });
+    Object.assign(S, { wdMode, modeByDate: sd.modeByDate });
+    Store.saveSettings(S); renderSettings(); renderModeDates(); msg($("mlMsg"), "已儲存每週設定", "ok");
+  });
+  $("mlApply").addEventListener("click", () => {
+    const out = $("mlMsg"), from = $("mlFrom").value, to = $("mlTo").value || from;
+    if(!from) return msg(out, "請選擇開始日期", "err");
+    if(to < from) return msg(out, "結束日期不可早於開始日期", "err");
+    const days = Math.round((new Date(to + "T00:00:00") - new Date(from + "T00:00:00")) / 864e5) + 1;
+    if(days > 366) return msg(out, "一次最多設定 366 天", "err");
+    const S = Store.settings(), sd = modeSeed(), mode = $("mlMode").value === "low" ? "low" : "normal", bd = Object.assign({}, sd.modeByDate);
+    for(let i = 0; i < days; i++){ const d = fmt(new Date(new Date(from + "T00:00:00").getTime() + i * 864e5)); if(mode === sd.wdMode[wdOf(d)]) delete bd[d]; else bd[d] = mode; }
+    Object.assign(S, { wdMode: sd.wdMode, modeByDate: bd });
+    Store.saveSettings(S); renderModeDates(); msg(out, `已設定 ${days} 天：${mode === "low" ? "關閉餐飲（平日價）" : "開啟餐飲與套組"}`, "ok");
+  });
+}
 function renderModeDates(){
   const sd = modeSeed(), t0 = todayStr();
   const keys = Object.keys(sd.modeByDate).filter(d => d >= t0).sort();
