@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BP</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BQ</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -834,7 +834,7 @@
             <b>🍃 平日價模式</b>
             <div class="hint" style="margin:2px 0 6px">哪幾天是平日價，到「每週場次與每場人數上限」設定每週模式，或到「指定日期設定」改特定日期。平日價日：無餐飲、可自備餐食、不能加購套組、沒有消費抵用金。</div>
             <label for="ctWdPrice" style="margin-top:6px">平日價大人票價（元）</label><input id="ctWdPrice" type="number" min="0">
-            <label for="ctWdNote">平日價日說明（顯示在預約頁）</label><input id="ctWdNote" maxlength="80">
+            <label for="ctWdNote">平日價日說明（顯示在預約頁；留空＝不顯示說明）</label><input id="ctWdNote" maxlength="80">
           </div>
           <label class="inline" style="margin:6px 0"><input type="checkbox" id="ctCheckinOn"><span>顯示「現場報到」分頁（目前預設隱藏；勾選並儲存後，選單就會出現）</span></label>
         </div>
@@ -2058,7 +2058,7 @@ function refreshBook(){
 // 入園資訊的預設內容。{場次}{期間}{天數} 與三個「行代號」會自動依最新設定換成文字
 function infoLineText(name){
   if(name === "{大人票價行}") return `入園費：大人 ${CONFIG.adultPrice} 元／人` + (CONFIG.adultCredit ? `（其中 ${CONFIG.adultCredit} 元${CONFIG.creditNote}）` : "")
-    + (hasLowDays() ? `；平日價日（預約頁會標示）大人 ${CONFIG.weekdayPrice} 元／人，${CONFIG.weekdayNote}` : "");
+    + (hasLowDays() ? `；平日價日（預約頁會標示）大人 ${CONFIG.weekdayPrice} 元／人${CONFIG.weekdayNote ? "，" + CONFIG.weekdayNote : ""}` : "");
   if(name === "{孩童票價行}") return `孩童（${CONFIG.childNote}）優惠價 ${CONFIG.childPrice} 元／人`;
   if(name === "{毛小孩費用行}") return CONFIG.petFee > 0 ? `毛小孩：${shortDate(CONFIG.petFeeFrom)} 起每隻 ${CONFIG.petFee} 元（之前入園免費）` : "";
   return name;
@@ -2134,7 +2134,7 @@ function renderDateInfo(){
     .map(x => `${x.label}${x.state === "ok" ? "剩 " + x.rem + " 位" : "額滿"}`).join("、");
   msg(out, t, "ok");
   const notes = [];
-  if(noMealOn(date)) notes.push(`🍃 <b>平日入園</b>：大人 ${esc(money(CONFIG.weekdayPrice))}／人。${esc(CONFIG.weekdayNote)}`);
+  if(noMealOn(date)) notes.push(`🍃 <b>平日入園</b>：大人 ${esc(money(CONFIG.weekdayPrice))}／人${CONFIG.weekdayNote ? "。" + esc(CONFIG.weekdayNote) : ""}`);
   else if(mealOpenOn(date)) notes.push(`🍃 <b>平日也提供餐飲</b>：大人票價同假日（可折抵），套組第二主食固定為<b>${esc(setChoiceCfg().fixed)}</b>。`);
   if(isNoPetDay(date)) notes.push(`⚠️ <b>當天不開放寵物入園</b>`);
   if(isPetDay(date)) notes.push(`🐾 <b>毛小孩野餐日</b>：${esc(CONFIG.petDayNote)}${petDayKidsRule() ? `<br><b>⚠️ ${esc(petDayKidsRule())}</b>` : ""}`);
@@ -4202,7 +4202,6 @@ function saveContent(){
   };
   if(![c.adultPrice, c.adultCredit, c.childPrice].every(x => int(x, 0, 100000))) return msg(out, "票價與抵用金請輸入 0 以上的整數", "err");
   if(!int(c.weekdayPrice, 0, 100000)) return msg(out, "平日票價請輸入 0 以上的整數", "err");
-  if(!c.weekdayNote) return msg(out, "請填寫平日價日說明", "err");
   if(c.adultCredit > c.adultPrice) return msg(out, "每位大人可抵用金額不能大於大人票價", "err");
   if(!c.childNote || !c.creditNote && c.adultCredit > 0) return msg(out, "請填寫孩童適用說明與抵用金說明", "err");
   if(!c.addon.name || !c.addon.unit) return msg(out, "請填寫加購商品名稱與單位", "err");
