@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BR</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BS</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -1104,6 +1104,7 @@
       <span id="edExtras" style="display:contents"></span>
       <div><label for="edTotal">預估金額（元）</label><input id="edTotal" type="number" min="0"></div>
     </div>
+    <div id="edPickBox"></div>
     <label class="inline" id="edPaidRow"><input type="checkbox" id="edDepositPaid"><span id="edPaidText">已付訂金</span></label>
     <div class="hint" id="edCalc" style="margin:4px 0"></div>
     <div class="grid2">
@@ -2713,13 +2714,28 @@ function fillEditArrival(sid, cur){
   $("edArrival").innerHTML = opts.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
   $("edArrival").value = cur && opts.includes(cur) ? cur : (opts[0] || "");
 }
+// 編輯預約：加購套組的每一組主菜／第二主食（店家可自由選，也可先留空）
+function renderEditPick(cur){
+  const date = $("edDate").value, qty = Number($("edAddon").value) || 0, fixed = mealOpenOn(date);
+  renderPickBox($("edPickBox"), Object.assign({ qty, date, pick: fixed ? "fixed" : "free" }, cur || {}));
+}
+function editPicks(){          // 回傳 { setPick, setMain }：長度依套組數量；固定日的第二主食自動帶固定值
+  const qty = Math.max(0, Math.floor(Number($("edAddon").value) || 0)), box = $("edPickBox"), date = $("edDate").value;
+  const old = Store.all().find(x => x.id === editingId) || {}, shown = !!box.querySelector("select");
+  const fit = a => Array.from({ length: qty }, (_, i) => (Array.isArray(a) ? a[i] : "") || "");
+  const trim = a => { const r = fit(a); return r.some(Boolean) ? r : []; };
+  const mainsShown = !!box.querySelector("select[data-main]"), picksShown = !!box.querySelector("select[data-pick]");
+  let setMain = mainsShown ? trim(readMains(box)) : trim(old.setMain), setPick = picksShown ? trim(readPicks(box)) : trim(old.setPick);
+  if(qty && mealOpenOn(date) && setChoiceCfg().on && setChoiceCfg().fixed) setPick = Array.from({ length: qty }, () => setChoiceCfg().fixed);
+  return { setPick, setMain };
+}
 function readEdit(){
   const n = id => Number($(id).value === "" ? NaN : $(id).value);
   return { date:$("edDate").value, session:$("edSession").value, arrival:$("edArrival").value, status:$("edStatus").value,
     adults:n("edAdults"), children:n("edChildren"), pets:n("edPets"), cars:n("edCars"), addonQty:n("edAddon"), total:n("edTotal"),
     extras:(() => { const o = {}; document.querySelectorAll("#edExtras input").forEach(x => { const v = Number(x.value || 0); if(v > 0 || !Number.isFinite(v)) o[x.dataset.id] = v; }); return o; })(),
     name:$("edName").value.trim(), phone:$("edPhone").value.trim(), email:$("edEmail").value.trim(),
-    note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim(),
+    note:$("edNote").value.trim(), adminNote:$("edAdminNote").value.trim(), ...editPicks(),
     ...($("edGuestRow").classList.contains("hidden") ? {} : { guest: $("edGuest").value === "reciprocal" ? "reciprocal" : "lodging" }) };
 }
 function editCalc(){
@@ -2753,6 +2769,7 @@ function openEdit(id){
   $("edAddon").value = b.addonQty || 0; $("edTotal").value = b.total || 0;
   $("edExtras").innerHTML = extraItems().map(it => `<div><label for="edEx_${it.id}">${esc(it.name)}（${esc(it.unit)}）</label><input id="edEx_${it.id}" data-id="${it.id}" type="number" min="0" value="${qtyOf(b, it.id)}"></div>`).join("");
   $("edDepositPaid").checked = !!kitOf(b).depositPaid;
+  renderEditPick({ curPick: Array.isArray(b.setPick) ? b.setPick : [], curMain: Array.isArray(b.setMain) ? b.setMain : [] });
   $("edName").value = b.name || ""; $("edPhone").value = b.phone || ""; $("edEmail").value = b.email || "";
   $("edNote").value = b.note || ""; $("edAdminNote").value = b.adminNote || "";
   $("edForce").checked = false; msg($("edMsg"), "", "");
@@ -2785,6 +2802,8 @@ async function saveEdit(){
   });
   extraItems().forEach(it => { const was = qtyOf(old, it.id), now = e.extras[it.id] || 0; if(was !== now) changes.push({ f:it.name, from:was, to:now }); });
   if(old.lodging && (old.guest === "reciprocal" ? "reciprocal" : "lodging") !== e.guest) changes.push({ f:"客人類別", from:guestName(old), to:guestName(e) });
+  if(mainText(old) !== mainText(e)) changes.push({ f:mainCfg().title, from:mainText(old) || "—", to:mainText(e) || "—" });
+  if(pickText(old) !== pickText(e)) changes.push({ f:setChoiceCfg().title, from:pickText(old) || "—", to:pickText(e) || "—" });
   const paidNow = $("edDepositPaid").checked;
   if(!!kitOf(old).depositPaid !== paidNow) changes.push({ f:"套組：已付訂金", from:kitOf(old).depositPaid ? "是" : "否", to:paidNow ? "是" : "否" });
   if(!changes.length) return msg(out, "沒有任何變更", "err");
@@ -4142,6 +4161,8 @@ function bindEdit(){
   $("edSave").addEventListener("click", saveEdit);
   $("edSession").addEventListener("change", () => { fillEditArrival($("edSession").value, $("edArrival").value); updateEditCalc(); });
   ["edDate","edAdults","edChildren","edPets","edAddon"].forEach(id => $(id).addEventListener("input", updateEditCalc));
+  ["edDate","edAddon"].forEach(id => $(id).addEventListener("input", () => renderEditPick()));
+  $("edPickBox").addEventListener("change", () => {});
   $("edExtras").addEventListener("input", updateEditCalc);
   $("edUseCalc").addEventListener("click", () => { const c = editCalc(); if(c !== null) $("edTotal").value = c; });
 }
