@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BS</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BT</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -1526,9 +1526,11 @@ const Store = {
   stockLimit(id, date, sid, S){
     const st = ((S || this.settings()).stock || {})[id]; if(!st) return null;
     const has = k => st.byDate && Object.prototype.hasOwnProperty.call(st.byDate, k);
-    if(st.mode === "day") return has(date) ? Number(st.byDate[date]) : ((st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def));     // 整天合計
+    const wk = wdOf(date), wdv = (st.wd !== null && st.wd !== undefined && st.wd !== "" && wk >= 1 && wk <= 5) ? Number(st.wd) : null;      // 平日（週一～五）專用數量
+    if(st.mode === "day") return has(date) ? Number(st.byDate[date]) : (wdv !== null ? wdv : ((st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def)));     // 整天合計
     if(has(date + "|" + sid)) return Number(st.byDate[date + "|" + sid]);
     if(has(date)) return Number(st.byDate[date]);
+    if(wdv !== null) return wdv;
     if(st.defBy && Object.prototype.hasOwnProperty.call(st.defBy, sid)) return Number(st.defBy[sid]);
     return (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def);
   },
@@ -3596,7 +3598,7 @@ function bindCustomerEdit(){
 }
 /* ========= 後台：租借品項與每日數量 ========= */
 const newItemId = () => "x" + Date.now().toString(36).slice(-7);
-const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { mode: st.mode === "day" ? "day" : "session", def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), defBy: Object.assign({}, st.defBy || {}), byDate: Object.assign({}, st.byDate || {}) }; };
+const stockOf = (S, id) => { const st = (S.stock && S.stock[id]) || {}; return { mode: st.mode === "day" ? "day" : "session", def: (st.def === null || st.def === undefined || st.def === "") ? null : Number(st.def), defBy: Object.assign({}, st.defBy || {}), wd: (st.wd === null || st.wd === undefined || st.wd === "") ? null : Number(st.wd), byDate: Object.assign({}, st.byDate || {}) }; };
 function invRowHtml(it, sk){
   sk = sk || {};
   const defOf = sid => (sk.defBy && Object.prototype.hasOwnProperty.call(sk.defBy, sid)) ? sk.defBy[sid] : sk.def;
@@ -3618,6 +3620,7 @@ function invRowHtml(it, sk){
     <div class="iv-daybox ${sk.mode === "day" ? "" : "hidden"}"><label>整天固定數量（留空 = 不限）</label><input class="iv-defday" type="number" min="0" placeholder="不限" value="${sk.mode === "day" && sk.def !== null && sk.def !== undefined ? esc(sk.def) : ""}"></div>
     <div class="iv-sesbox ${sk.mode === "day" ? "hidden" : ""}"><label>固定數量（每個場次各自一個數字，留空 = 不限）</label>
     <div class="grid2">${SESSIONS.map(x => { const v = defOf(x.id); return `<div><label style="margin-top:0">${esc(x.label)}</label><input class="iv-defs" data-sid="${esc(x.id)}" type="number" min="0" placeholder="不限" value="${v === null || v === undefined ? "" : esc(v)}"></div>`; }).join("")}</div></div>
+    <div class="iv-wdbox" style="margin-top:8px"><label>平日（週一～週五）固定數量（留空 = 和上面相同；分上午／下午時，是每個場次各自的數量）</label><input class="iv-wd" type="number" min="0" placeholder="同上" value="${sk.wd === null || sk.wd === undefined ? "" : esc(sk.wd)}"></div>
     ${set ? "" : `<button class="btn ghost small iv-del" style="margin-top:6px">刪除這個品項</button>`}
   </div>`;
 }
@@ -3740,6 +3743,9 @@ async function invSaveItems(){
       }
       stock[id] = Object.assign({ byDate: {} }, stock[id] || {}, { mode, def: null, defBy });
     }
+    { const raw = q(".iv-wd").value.trim(), v = raw === "" ? null : Number(raw);
+      if(v !== null && (!Number.isInteger(v) || v < 0 || v > 9999)) return msg(out, "平日固定數量請輸入 0 以上的整數，或留空", "err");
+      stock[id].wd = v; }
     if(id === "set") continue;
     const name = q(".iv-name").value.trim(), unit = q(".iv-unit").value.trim() || "個", price = Number(q(".iv-price").value), max = Number(q(".iv-max").value);
     if(!name) return msg(out, "請填寫品項名稱", "err");
