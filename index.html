@@ -512,7 +512,7 @@
     <div id="adminPanel" class="hidden">
       <div id="ackBox" class="hidden"></div>
       <div id="smsBox" class="hidden"></div>
-      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BT</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
+      <div class="fold-bar"><span class="hint" style="margin:0 auto 0 0;align-self:center">版本 1022-BU</span><button class="btn ghost small" id="layEdit">🎨 整理版面</button><button class="btn ghost small" id="foldAll">全部展開</button><button class="btn ghost small" id="foldNone">全部收合</button></div>
       <div id="grpBar" class="fold-bar" style="justify-content:flex-start"></div>
 
       <div id="layBar">
@@ -633,6 +633,11 @@
         <label for="mlMode">這些日期</label>
         <select id="mlMode"><option value="normal">開啟餐飲與套組（大人原價、可折抵）</option><option value="low">關閉（平日價，無餐飲）</option></select>
         <button class="btn" id="mlApply">套用到這些日期</button>
+        <h2 class="sec" style="margin-top:16px">平日套組預約截止時間</h2>
+        <label class="inline"><input type="checkbox" id="mlCutOn"><span>平日（週一～週五）的野餐套組，要在前一天的指定時間前預約</span></label>
+        <label for="mlCutHour">截止時間（前一天幾點，0～23）</label><input id="mlCutHour" type="number" min="0" max="23" style="max-width:120px">
+        <button class="btn small" id="mlSaveCut" style="margin-top:8px">儲存截止設定</button>
+        <div class="hint">超過截止時間，客人就不能新增平日的套組，只能預約入園（單點輕食不受影響）。已預約的套組不受影響；店家在後台代客預約不受限制。</div>
         <div id="mlMsg"></div>
         <div class="hint">已設定的指定日期，可到「票價模式（指定日期）」查看或移除。若指定日期落在週六、週日，也會照你選的設定。</div>
       </div>
@@ -1935,14 +1940,25 @@ function renderStatic(){
 }
 
 // 依日期的剩餘數量重建「加購」選單；額滿／當天關閉時不能選並顯示原因
+// 平日（週一～五）野餐套組：前一天 N 點前才能預約（以裝置時間判斷，最終以伺服器為準）
+function setClosedOn(date){
+  const S = Store.settings(); if(!date || S.setCutoffOn === false || !mealOpenOn(date)) return false;
+  const w = wdOf(date); if(w < 1 || w > 5) return false;
+  const h = Number.isInteger(S.setCutoffHour) && S.setCutoffHour >= 0 && S.setCutoffHour <= 23 ? S.setCutoffHour : 12;
+  const p = new Date(date + "T00:00:00"); p.setDate(p.getDate() - 1);
+  return new Date() >= new Date(p.getFullYear(), p.getMonth(), p.getDate(), h, 0, 0);
+}
+const setCutoffHour = () => { const h = Store.settings().setCutoffHour; return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 12; };
 function fillItemSelect(sel, it, date, sid, keep, own, hintEl, noun){
   const known = !!(date && (sid || Store.stockMode(it.id) === "day"));                // 還沒選場次就先不限制，選了場次再依該場次的數量更新
   const left = known ? Store.stockLeft(it.id, date, sid, own) : Infinity;
   // 客人改單：本筆原本已訂的數量一定保留得住（庫存被店家調降或已滿，也不會在改車輛、備註時被默默清成 0）
   const held = (own && own.status === "confirmed" && own.date === date && (Store.stockMode(it.id) === "day" || own.session === sid)) ? Math.min(it.max, qtyOf(own, it.id)) : 0;
-  const mx = Math.max(held, 0, left === Infinity ? it.max : Math.min(it.max, left));
+  const cut = it.id === "set" && setClosedOn(date);
+  const mx = cut ? held : Math.max(held, 0, left === Infinity ? it.max : Math.min(it.max, left));
   fillSelect(sel, 0, mx, Math.min(keep, mx), n => n === 0 ? (noun || "不加購") : `${n} ${it.unit}`);
-  sel.disabled = known && mx === 0;
+  sel.disabled = cut || (known && mx === 0);
+  if(hintEl && cut){ hintEl.textContent = `⚠️ 平日的${it.name}需在前一天 ${String(setCutoffHour()).padStart(2, "0")}:00 前預約，這天已截止，無法預訂套組`; hintEl.style.color = "var(--warn)"; return; }
   if(hintEl){
     const lim = known ? Store.stockLimit(it.id, date, sid) : null;
     hintEl.textContent = (known && lim !== null) ? (left === 0 ? `⚠️ ${Store.stockMode(it.id) === "day" ? "這天" : "這個場次"}的${it.name}已額滿／未開放，無法加購` : `${Store.stockMode(it.id) === "day" ? "這天" : "這個場次"}${it.name}還剩 ${left} ${it.unit}`) : "";
@@ -2138,6 +2154,7 @@ function renderDateInfo(){
   msg(out, t, "ok");
   const notes = [];
   if(noMealOn(date)) notes.push(`🍃 <b>平日入園</b>：大人 ${esc(money(CONFIG.weekdayPrice))}／人${CONFIG.weekdayNote ? "。" + esc(CONFIG.weekdayNote) : ""}`);
+  if(mealOpenOn(date) && Store.settings().setCutoffOn !== false && wdOf(date) >= 1 && wdOf(date) <= 5) notes.push(setClosedOn(date) ? `🧺 <b>平日野餐套組已截止預約</b>（需在前一天 ${String(setCutoffHour()).padStart(2, "0")}:00 前）` : `🧺 <b>平日野餐套組</b>需在前一天 ${String(setCutoffHour()).padStart(2, "0")}:00 前預約`);
   if(isNoPetDay(date)) notes.push(`⚠️ <b>當天不開放寵物入園</b>`);
   if(isPetDay(date)) notes.push(`🐾 <b>毛小孩野餐日</b>：${esc(CONFIG.petDayNote)}${petDayKidsRule() ? `<br><b>⚠️ ${esc(petDayKidsRule())}</b>` : ""}`);
   if(notes.length) out.innerHTML += `<div class="msg info" style="margin-top:8px"><b>📌 這天的說明</b><ul style="margin:4px 0 0;padding-left:20px">${notes.map(n => `<li style="margin:3px 0">${n}</li>`).join("")}</ul></div>`;
@@ -4644,6 +4661,7 @@ function renderMealCard(){
   if(!$("mlWeek")) return;
   const sd = modeSeed();
   $("mlFixed").textContent = setChoiceCfg().fixed || "";
+  $("mlCutOn").checked = Store.settings().setCutoffOn !== false; $("mlCutHour").value = setCutoffHour();
   $("mlWeek").innerHTML = [1, 2, 3, 4, 5].map(wd => `<label class="inline"><input type="checkbox" data-mlwd="${wd}" ${sd.wdMode[wd] !== "low" ? "checked" : ""}><span>週${WEEK[wd]}　開放餐飲與套組</span></label>`).join("");
 }
 function bindMeal(){
@@ -4653,6 +4671,12 @@ function bindMeal(){
     document.querySelectorAll("#mlWeek [data-mlwd]").forEach(c => { wdMode[+c.dataset.mlwd] = c.checked ? "normal" : "low"; });
     Object.assign(S, { wdMode, modeByDate: sd.modeByDate });
     Store.saveSettings(S); renderSettings(); renderModeDates(); msg($("mlMsg"), "已儲存每週設定", "ok");
+  });
+  $("mlSaveCut").addEventListener("click", () => {
+    const h = Number($("mlCutHour").value);
+    if(!Number.isInteger(h) || h < 0 || h > 23) return msg($("mlMsg"), "截止時間請輸入 0～23 的整數", "err");
+    const S = Store.settings(); S.setCutoffOn = $("mlCutOn").checked; S.setCutoffHour = h; Store.saveSettings(S);
+    msg($("mlMsg"), S.setCutoffOn ? `已儲存：平日套組需在前一天 ${String(h).padStart(2, "0")}:00 前預約` : "已儲存：平日套組不設截止時間", "ok");
   });
   $("mlApply").addEventListener("click", () => {
     const out = $("mlMsg"), from = $("mlFrom").value, to = $("mlTo").value || from;
